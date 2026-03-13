@@ -60,6 +60,17 @@ const EXTRACTION_HOLD_TICKS = 6 * TICK_RATE;
 const EXTRACTION_PAYOUT_RATE = 0.95;
 
 const ALLOWED_STAKES = [1, 5, 10, 20];
+const ALLOWED_PLAYER_COLORS = new Set([
+  "#111111",
+  "#ef4444",
+  "#ec4899",
+  "#8b5cf6",
+  "#facc15",
+  "#f97316",
+  "#8b5a2b",
+  "#9ca3af",
+  "#3b82f6"
+]);
 
 const players = new Map();
 const playerByUserId = new Map();
@@ -179,6 +190,11 @@ function randomColor() {
   return `hsl(${hue}, 80%, 58%)`;
 }
 
+function sanitizePlayerColor(color) {
+  const normalized = String(color || "").trim().toLowerCase();
+  return ALLOWED_PLAYER_COLORS.has(normalized) ? normalized : "#3b82f6";
+}
+
 function randomPointInCircle(maxRadius) {
   const angle = Math.random() * Math.PI * 2;
   const radius = Math.sqrt(Math.random()) * maxRadius;
@@ -271,7 +287,7 @@ function createHumanPlayer(socketId, user, payload) {
     userId: Number(user.id),
     username: user.username,
     name: safeName,
-    color: requestedColor || randomColor(),
+    color: sanitizePlayerColor(requestedColor),
     mouse: { x: 0, y: 0 },
     wantsSplit: false,
     wantsEject: false,
