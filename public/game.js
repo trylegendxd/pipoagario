@@ -68,6 +68,21 @@ const musicPlayPauseBtn = document.getElementById("musicPlayPauseBtn");
 const musicNextBtn = document.getElementById("musicNextBtn");
 const musicVolumeRange = document.getElementById("musicVolumeRange");
 
+const rouletteOpenBtn = document.getElementById("rouletteOpenBtn");
+const rouletteOverlay = document.getElementById("rouletteOverlay");
+const closeRouletteBtn = document.getElementById("closeRouletteBtn");
+const rouletteBalanceValue = document.getElementById("rouletteBalanceValue");
+const rouletteAmountButtons = document.getElementById("rouletteAmountButtons");
+const rouletteBetRedBtn = document.getElementById("rouletteBetRedBtn");
+const rouletteBetBlackBtn = document.getElementById("rouletteBetBlackBtn");
+const rouletteSelectedBet = document.getElementById("rouletteSelectedBet");
+const rouletteNumberGrid = document.getElementById("rouletteNumberGrid");
+const rouletteSpinBtn = document.getElementById("rouletteSpinBtn");
+const rouletteStatus = document.getElementById("rouletteStatus");
+const rouletteResultValue = document.getElementById("rouletteResultValue");
+const rouletteWheelCanvas = document.getElementById("rouletteWheelCanvas");
+const rouletteWheelCtx = rouletteWheelCanvas ? rouletteWheelCanvas.getContext("2d") : null;
+
 const toastContainer = document.getElementById("toastContainer");
 
 let W = (canvas.width = window.innerWidth);
@@ -107,7 +122,13 @@ const state = {
   currentTrackIndex: 0,
   musicMuted: false,
   musicVolume: 0.4,
-  musicReady: false
+  musicReady: false,
+  rouletteOpen: false,
+  rouletteSpinning: false,
+  rouletteBetType: "color",
+  rouletteBetValue: "red",
+  rouletteBetAmount: 1,
+  rouletteRotation: 0
 };
 
 const snapshots = [];
@@ -134,6 +155,15 @@ const ALLOWED_BALL_COLORS = [
 
 const DEFAULT_BALL_COLOR = "#3b82f6";
 
+const EURO_ROULETTE_ORDER = [
+  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
+  24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+];
+
+const ROULETTE_RED_NUMBERS = new Set([
+  1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
+]);
+
 function radiusFromMass(mass) {
   return Math.sqrt(mass) * 4.8;
 }
@@ -146,8 +176,268 @@ function formatBallMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function formatMoney(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
+
+function getRouletteColor(number) {
+  if (number === 0) return "green";
+  return ROULETTE_RED_NUMBERS.has(Number(number)) ? "red" : "black";
+}
+
+function getRouletteBetLabel() {
+  if (state.rouletteBetType === "number") {
+    return `Number ${state.rouletteBetValue}`;
+  }
+  return String(state.rouletteBetValue || "red").replace(/^./, (m) => m.toUpperCase());
+}
+
+function setRouletteStatus(text, isError = false) {
+  if (!rouletteStatus) return;
+  rouletteStatus.textContent = text || "";
+  rouletteStatus.style.color = isError ? "#c62828" : "#607289";
+}
+
+function updateRouletteBalance() {
+  if (!rouletteBalanceValue) return;
+  rouletteBalanceValue.textContent = formatMoney(state.wallet);
+}
+
+function setRouletteBet(type, value) {
+  state.rouletteBetType = type;
+  state.rouletteBetValue = value;
+  renderRouletteUi();
+}
+
+function renderRouletteNumberButtons() {
+  if (!rouletteNumberGrid) return;
+  rouletteNumberGrid.innerHTML = EURO_ROULETTE_ORDER.map((number) => {
+    const color = getRouletteColor(number);
+    return `<button type="button" class="rouletteNumberBtn ${color}" data-roulette-number="${number}">${number}</button>`;
+  }).join("");
+}
+
+function renderRouletteUi() {
+  updateRouletteBalance();
+
+  document.querySelectorAll("[data-roulette-amount]").forEach((btn) => {
+    btn.classList.toggle("active", Number(btn.dataset.rouletteAmount) === state.rouletteBetAmount);
+    btn.disabled = state.rouletteSpinning;
+  });
+
+  rouletteBetRedBtn?.classList.toggle("active", state.rouletteBetType === "color" && state.rouletteBetValue === "red");
+  rouletteBetBlackBtn?.classList.toggle("active", state.rouletteBetType === "color" && state.rouletteBetValue === "black");
+
+  document.querySelectorAll("[data-roulette-number]").forEach((btn) => {
+    btn.classList.toggle("active", state.rouletteBetType === "number" && Number(btn.dataset.rouletteNumber) === Number(state.rouletteBetValue));
+    btn.disabled = state.rouletteSpinning;
+  });
+
+  if (rouletteBetRedBtn) rouletteBetRedBtn.disabled = state.rouletteSpinning;
+  if (rouletteBetBlackBtn) rouletteBetBlackBtn.disabled = state.rouletteSpinning;
+  if (rouletteSpinBtn) rouletteSpinBtn.disabled = state.rouletteSpinning || !currentUser || state.wallet < state.rouletteBetAmount;
+
+  if (rouletteSelectedBet) {
+    rouletteSelectedBet.textContent = `Betting on ${getRouletteBetLabel()} · $${state.rouletteBetAmount}`;
+  }
+
+  drawRouletteWheel(state.rouletteRotation || 0);
+}
+
+function drawRouletteWheel(rotationDeg = 0) {
+  if (!rouletteWheelCanvas || !rouletteWheelCtx) return;
+
+  const ctx = rouletteWheelCtx;
+  const width = rouletteWheelCanvas.width;
+  const height = rouletteWheelCanvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const outerR = Math.min(width, height) * 0.46;
+  const midR = outerR * 0.78;
+  const innerR = outerR * 0.56;
+  const hubR = outerR * 0.16;
+  const slice = (Math.PI * 2) / EURO_ROULETTE_ORDER.length;
+  const rot = (rotationDeg * Math.PI) / 180;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+
+  for (let i = 0; i < EURO_ROULETTE_ORDER.length; i += 1) {
+    const number = EURO_ROULETTE_ORDER[i];
+    const color = getRouletteColor(number);
+    const start = -Math.PI / 2 + i * slice;
+    const end = start + slice;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, outerR, start, end);
+    ctx.closePath();
+    ctx.fillStyle =
+      color === "green"
+        ? "#0ea75a"
+        : color === "red"
+          ? "#ef4444"
+          : "#111111";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, outerR, start, end);
+    ctx.arc(0, 0, midR, end, start, true);
+    ctx.closePath();
+    ctx.fillStyle =
+      color === "green"
+        ? "#0ebc68"
+        : color === "red"
+          ? "#ff4f5d"
+          : "#202530";
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.86)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(start) * midR, Math.sin(start) * midR);
+    ctx.lineTo(Math.cos(start) * outerR, Math.sin(start) * outerR);
+    ctx.stroke();
+
+    const center = start + slice / 2;
+    ctx.save();
+    ctx.rotate(center);
+    ctx.translate((midR + outerR) / 2, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = "#ffecc4";
+    ctx.font = "900 28px Ubuntu, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(number), 0, 0);
+    ctx.restore();
+  }
+
+  ctx.fillStyle = "#cfd5dd";
+  ctx.beginPath();
+  ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#a4adb7";
+  ctx.beginPath();
+  ctx.arc(0, 0, hubR * 1.65, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#edf2f7";
+  ctx.beginPath();
+  ctx.arc(0, 0, hubR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function animateRouletteToNumber(winningNumber) {
+  const index = EURO_ROULETTE_ORDER.indexOf(Number(winningNumber));
+  if (index < 0) return Promise.resolve();
+
+  const sliceDeg = 360 / EURO_ROULETTE_ORDER.length;
+  const centerDeg = -90 + index * sliceDeg + sliceDeg / 2;
+  const desiredNorm = ((-centerDeg % 360) + 360) % 360;
+  const current = Number(state.rouletteRotation || 0);
+  const currentNorm = ((current % 360) + 360) % 360;
+  let delta = desiredNorm - currentNorm;
+  if (delta < 0) delta += 360;
+  const target = current + 1800 + delta;
+
+  return new Promise((resolve) => {
+    const duration = 4600;
+    const start = performance.now();
+    const startRotation = current;
+
+    function frame(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      state.rouletteRotation = startRotation + (target - startRotation) * eased;
+      drawRouletteWheel(state.rouletteRotation);
+
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        state.rouletteRotation = target;
+        drawRouletteWheel(state.rouletteRotation);
+        resolve();
+      }
+    }
+
+    requestAnimationFrame(frame);
+  });
+}
+
+function openRouletteModal() {
+  if (!currentUser || !rouletteOverlay) return;
+  state.rouletteOpen = true;
+  rouletteOverlay.classList.remove("hidden");
+  updateRouletteBalance();
+  renderRouletteUi();
+  setRouletteStatus("Choose a bet and spin the wheel.");
+}
+
+function closeRouletteModal() {
+  if (!rouletteOverlay || state.rouletteSpinning) return;
+  state.rouletteOpen = false;
+  rouletteOverlay.classList.add("hidden");
+}
+
+async function handleRouletteSpin() {
+  if (state.rouletteSpinning) return;
+  if (!currentUser) {
+    setRouletteStatus("You need to be logged in.", true);
+    return;
+  }
+  if (state.wallet < state.rouletteBetAmount) {
+    setRouletteStatus("Not enough balance for that bet.", true);
+    return;
+  }
+
+  state.rouletteSpinning = true;
+  renderRouletteUi();
+  setRouletteStatus("Spinning...");
+
+  const payload = {
+    amount: state.rouletteBetAmount,
+    betType: state.rouletteBetType,
+    betValue: state.rouletteBetValue
+  };
+
+  try {
+    const data = await api("/api/casino/roulette/spin", payload);
+    if (data.error) {
+      state.rouletteSpinning = false;
+      renderRouletteUi();
+      setRouletteStatus(data.error, true);
+      return;
+    }
+
+    await animateRouletteToNumber(data.winningNumber);
+
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+    updateRouletteBalance();
+    renderRouletteUi();
+
+    const resultText = `${data.winningNumber} ${String(data.winningColor || "").replace(/^./, (m) => m.toUpperCase())}`;
+    if (rouletteResultValue) rouletteResultValue.textContent = resultText;
+
+    if (data.win) {
+      const payoutText = Number(data.payout || 0).toFixed(2);
+      setRouletteStatus(`You won $${payoutText}!`, false);
+      showToast(`Roulette win: ${resultText} · +$${payoutText}`);
+    } else {
+      setRouletteStatus(`You lost $${Number(data.amount || 0).toFixed(2)}.`, true);
+      showToast(`Roulette result: ${resultText}`);
+    }
+
+    await refreshMenuWalletLeaderboard();
+  } catch (err) {
+    console.error("ROULETTE SPIN ERROR:", err);
+    setRouletteStatus("Roulette spin failed.", true);
+  } finally {
+    state.rouletteSpinning = false;
+    renderRouletteUi();
+  }
 }
 
 function waitForSocketConnect(timeoutMs = 5000) {
@@ -294,6 +584,8 @@ function hideMenusForGame() {
 function updateWalletUi(wallet) {
   state.wallet = Number(wallet || 0);
   if (walletValue) walletValue.textContent = formatMoney(state.wallet);
+  updateRouletteBalance();
+  renderRouletteUi();
 }
 
 function setPlayButtonState(busy = false) {
@@ -820,7 +1112,9 @@ function setChatOpen(open) {
 
   if (chatOpen && chatInput) {
     setTimeout(() => chatInput.focus(), 0);
-  } else setSelectedBallColor(DEFAULT_BALL_COLOR);
+  } else renderRouletteNumberButtons();
+drawRouletteWheel(0);
+setSelectedBallColor(DEFAULT_BALL_COLOR);
 updateMenuMusicVisibility();
 
 if (chatInput) {
@@ -1489,6 +1783,34 @@ musicVolumeRange?.addEventListener("input", () => {
   }
 });
 
+rouletteOpenBtn?.addEventListener("click", openRouletteModal);
+closeRouletteBtn?.addEventListener("click", closeRouletteModal);
+rouletteSpinBtn?.addEventListener("click", handleRouletteSpin);
+
+rouletteAmountButtons?.querySelectorAll("[data-roulette-amount]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (state.rouletteSpinning) return;
+    state.rouletteBetAmount = Number(btn.dataset.rouletteAmount || 1);
+    renderRouletteUi();
+  });
+});
+
+rouletteBetRedBtn?.addEventListener("click", () => {
+  if (state.rouletteSpinning) return;
+  setRouletteBet("color", "red");
+});
+
+rouletteBetBlackBtn?.addEventListener("click", () => {
+  if (state.rouletteSpinning) return;
+  setRouletteBet("color", "black");
+});
+
+rouletteNumberGrid?.addEventListener("click", (e) => {
+  const target = e.target.closest("[data-roulette-number]");
+  if (!target || state.rouletteSpinning) return;
+  setRouletteBet("number", Number(target.dataset.rouletteNumber));
+});
+
 menuMusic?.addEventListener("ended", () => {
   playNextTrack();
 });
@@ -1496,8 +1818,16 @@ menuMusic?.addEventListener("ended", () => {
 menuMusic?.addEventListener("play", updatePlayPauseButton);
 menuMusic?.addEventListener("pause", updatePlayPauseButton);
 
+renderRouletteNumberButtons();
+drawRouletteWheel(0);
 setSelectedBallColor(DEFAULT_BALL_COLOR);
 updateMenuMusicVisibility();
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.rouletteOpen && !state.rouletteSpinning) {
+    closeRouletteModal();
+  }
+});
 
 if (chatInput) {
   chatInput.addEventListener("keydown", (e) => {
