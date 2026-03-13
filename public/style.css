@@ -1283,7 +1283,9 @@ canvas {
   border-color: #14532d;
   box-shadow: 0 10px 22px rgba(15, 61, 34, 0.35);
   cursor: pointer;
+  pointer-events: auto;
   font-weight: 900;
+  opacity: 1;
 }
 
 .casinoBtn.blackjackLaunchBtn:hover {
