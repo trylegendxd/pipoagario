@@ -60,7 +60,9 @@ const sendPrivateChatBtn = document.getElementById("sendPrivateChatBtn");
 const closePrivateChatBtn = document.getElementById("closePrivateChatBtn");
 
 const menuMusic = document.getElementById("menuMusic");
+const menuMusicPlayer = document.getElementById("menuMusicPlayer");
 const musicSongName = document.getElementById("musicSongName");
+const musicCloseBtn = document.getElementById("musicCloseBtn");
 const musicPrevBtn = document.getElementById("musicPrevBtn");
 const musicPlayPauseBtn = document.getElementById("musicPlayPauseBtn");
 const musicNextBtn = document.getElementById("musicNextBtn");
@@ -117,6 +119,20 @@ let isJoinInFlight = false;
 let inMatch = false;
 let chatOpen = false;
 let currentUser = null;
+
+const ALLOWED_BALL_COLORS = [
+  { name: "Black", value: "#111111" },
+  { name: "Red", value: "#ef4444" },
+  { name: "Pink", value: "#ec4899" },
+  { name: "Purple", value: "#8b5cf6" },
+  { name: "Yellow", value: "#facc15" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Brown", value: "#8b5a2b" },
+  { name: "Grey", value: "#9ca3af" },
+  { name: "Blue", value: "#3b82f6" }
+];
+
+const DEFAULT_BALL_COLOR = "#3b82f6";
 
 function radiusFromMass(mass) {
   return Math.sqrt(mass) * 4.8;
@@ -558,16 +574,23 @@ async function removeFriend(username) {
   await refreshFriendsList();
 }
 
+function updateMenuMusicVisibility() {
+  if (!menuMusicPlayer) return;
+  menuMusicPlayer.classList.toggle("chatHidden", Boolean(state.activePrivateChat));
+}
+
 function renderPrivateChat() {
   if (!privateChatCard || !privateChatMessages) return;
 
   const friend = state.activePrivateChat;
   if (!friend) {
     privateChatCard.classList.add("hidden");
+    updateMenuMusicVisibility();
     return;
   }
 
   privateChatCard.classList.remove("hidden");
+  updateMenuMusicVisibility();
   privateChatTitle.textContent = `Chat with ${friend}`;
 
   const items = state.privateChats[friend] || [];
@@ -731,6 +754,12 @@ function toggleMusicPlayback() {
   }
 }
 
+function closeMusicPlayer() {
+  if (!menuMusicPlayer) return;
+  pauseMenuMusic();
+  menuMusicPlayer.classList.add("hidden");
+}
+
 function playNextTrack() {
   if (!state.musicPlaylist.length) return;
   setCurrentTrack(state.currentTrackIndex + 1, !inMatch);
@@ -791,7 +820,10 @@ function setChatOpen(open) {
 
   if (chatOpen && chatInput) {
     setTimeout(() => chatInput.focus(), 0);
-  } else if (chatInput) {
+  } else setSelectedBallColor(DEFAULT_BALL_COLOR);
+updateMenuMusicVisibility();
+
+if (chatInput) {
     chatInput.blur();
   }
 }
@@ -837,9 +869,44 @@ function spawnBackgroundBalls(container, count) {
   }
 }
 
+function normalizeBallColor(color) {
+  const normalized = String(color || "").trim().toLowerCase();
+  const match = ALLOWED_BALL_COLORS.find((item) => item.value.toLowerCase() === normalized);
+  return match ? match.value : DEFAULT_BALL_COLOR;
+}
+
+function getBallColorMeta(color) {
+  const normalized = normalizeBallColor(color).toLowerCase();
+  return (
+    ALLOWED_BALL_COLORS.find((item) => item.value.toLowerCase() === normalized) ||
+    ALLOWED_BALL_COLORS[ALLOWED_BALL_COLORS.length - 1]
+  );
+}
+
+function setSelectedBallColor(color) {
+  if (!colorInput) return;
+
+  const meta = getBallColorMeta(color);
+  colorInput.value = meta.value;
+
+  document.querySelectorAll(".colorSwatch").forEach((btn) => {
+    const swatchColor = String(btn.getAttribute("data-color") || "").toLowerCase();
+    btn.classList.toggle("active", swatchColor === meta.value.toLowerCase());
+  });
+
+  updateColorPreview();
+}
+
 function updateColorPreview() {
   if (!colorPreviewBall || !colorInput) return;
-  colorPreviewBall.style.background = colorInput.value || "#33c3ff";
+
+  const meta = getBallColorMeta(colorInput.value);
+  colorPreviewBall.style.background = meta.value;
+
+  const previewName = document.getElementById("colorPreviewName");
+  if (previewName) {
+    previewName.textContent = meta.name;
+  }
 }
 
 function worldToScreen(x, y) {
@@ -1270,7 +1337,7 @@ async function joinGame() {
 
     socket.emit("join", {
       name: (nameInput?.value || "").trim() || "Player",
-      color: colorInput ? colorInput.value : "#33c3ff"
+      color: normalizeBallColor(colorInput ? colorInput.value : DEFAULT_BALL_COLOR)
     });
   } catch (err) {
     console.error("JOIN GAME ERROR:", err);
@@ -1377,7 +1444,13 @@ stakeButtons.forEach((btn) => {
   });
 });
 
-colorInput?.addEventListener("input", updateColorPreview);
+document.querySelectorAll(".colorSwatch").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setSelectedBallColor(btn.getAttribute("data-color") || DEFAULT_BALL_COLOR);
+  });
+});
+
+musicCloseBtn?.addEventListener("click", closeMusicPlayer);
 
 toggleFriendSearchBtn?.addEventListener("click", () => {
   friendSearchPanel?.classList.toggle("hidden");
@@ -1422,6 +1495,9 @@ menuMusic?.addEventListener("ended", () => {
 
 menuMusic?.addEventListener("play", updatePlayPauseButton);
 menuMusic?.addEventListener("pause", updatePlayPauseButton);
+
+setSelectedBallColor(DEFAULT_BALL_COLOR);
+updateMenuMusicVisibility();
 
 if (chatInput) {
   chatInput.addEventListener("keydown", (e) => {
