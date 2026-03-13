@@ -72,6 +72,11 @@ const ALLOWED_PLAYER_COLORS = new Set([
   "#3b82f6"
 ]);
 
+const ROULETTE_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
+const ROULETTE_RED_NUMBERS = new Set([
+  1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
+]);
+
 const players = new Map();
 const playerByUserId = new Map();
 const socketsByUserId = new Map();
@@ -523,6 +528,15 @@ async function getSessionUser(req) {
   return req.session.user;
 }
 
+function getRouletteColor(number) {
+  if (Number(number) === 0) return "green";
+  return ROULETTE_RED_NUMBERS.has(Number(number)) ? "red" : "black";
+}
+
+function getRandomRouletteNumber() {
+  return Math.floor(Math.random() * 37);
+}
+
 async function requireAuth(req, res, next) {
   try {
     const user = await getSessionUser(req);
@@ -706,6 +720,88 @@ app.get("/api/me", async (req, res) => {
 app.get("/api/balance", requireAuth, (req, res) => {
   res.json({ ok: true, wallet: Number(req.user.credits || 0) });
 });
+
+app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
+  try {
+    const amount = Number(req.body?.amount);
+    const betType = String(req.body?.betType || "").trim().toLowerCase();
+    const rawBetValue = req.body?.betValue;
+
+    if (!ROULETTE_ALLOWED_BET_AMOUNTS.has(amount)) {
+      return res.status(400).json({ error: "Roulette bets must be between $1 and $5." });
+    }
+
+    if (!["color", "number"].includes(betType)) {
+      return res.status(400).json({ error: "Invalid roulette bet type." });
+    }
+
+    let betValue;
+    if (betType === "color") {
+      betValue = String(rawBetValue || "").trim().toLowerCase();
+      if (!["red", "black"].includes(betValue)) {
+        return res.status(400).json({ error: "Color bets must be red or black." });
+      }
+    } else {
+      betValue = Number(rawBetValue);
+      if (!Number.isInteger(betValue) || betValue < 0 || betValue > 36) {
+        return res.status(400).json({ error: "Number bets must be between 0 and 36." });
+      }
+    }
+
+    let wallet = await spendCreditsTx(
+      req.user.id,
+      amount,
+      "roulette_bet",
+      betType === "color" ? `Roulette ${betValue}` : `Roulette number ${betValue}`
+    );
+
+    const winningNumber = getRandomRouletteNumber();
+    const winningColor = getRouletteColor(winningNumber);
+
+    let win = false;
+    let payout = 0;
+
+    if (betType === "color") {
+      win = winningColor !== "green" && betValue === winningColor;
+      payout = win ? amount * 2 : 0;
+    } else {
+      win = Number(betValue) === winningNumber;
+      payout = win ? amount * 36 : 0;
+    }
+
+    if (payout > 0) {
+      wallet = await addCreditsTx(
+        req.user.id,
+        payout,
+        "roulette_win",
+        `Roulette win on ${winningNumber} ${winningColor}`
+      );
+    }
+
+    req.session.user.credits = wallet;
+
+    res.json({
+      ok: true,
+      wallet,
+      amount,
+      betType,
+      betValue,
+      winningNumber,
+      winningColor,
+      win,
+      payout,
+      profit: payout - amount
+    });
+  } catch (err) {
+    if (err?.code === "INSUFFICIENT_CREDITS") {
+      return res.status(400).json({ error: "Not enough balance." });
+    }
+
+    console.error("ROULETTE SPIN ERROR:", err);
+    res.status(500).json({ error: "Failed to spin roulette." });
+  }
+});
+
 
 app.get("/api/leaderboard/wallet", async (req, res) => {
   try {
