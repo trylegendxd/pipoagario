@@ -1,2427 +1,2477 @@
-const path = require("path");
-const fs = require("fs");
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const session = require("express-session");
-const PgSession = require("connect-pg-simple")(session);
-const bcrypt = require("bcryptjs");
-const { Pool } = require("pg");
-
-const app = express();
-app.set("trust proxy", 1);
-
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: true,
-    credentials: true
-  }
+const socket = io({
+  autoConnect: false,
+  withCredentials: true
 });
 
-const PORT = Number(process.env.PORT || 3000);
-const PUBLIC_DIR = path.join(__dirname, "public");
-const AUDIO_DIR = path.join(PUBLIC_DIR, "audio");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  throw new Error("Missing DATABASE_URL environment variable.");
-}
+const landingScreen = document.getElementById("landingScreen");
+const startMenuBtn = document.getElementById("startMenuBtn");
+const colorInput = document.getElementById("colorInput");
+const colorPreviewBall = document.getElementById("colorPreviewBall");
+const moneyBg = document.getElementById("moneyBg");
+const menuBallsBg = document.getElementById("menuBallsBg");
 
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false
+const menu = document.getElementById("menu");
+const playBtn = document.getElementById("playBtn");
+const nameInput = document.getElementById("nameInput");
+const massValue = document.getElementById("massValue");
+
+const gameLeaderboard = document.getElementById("gameLeaderboard");
+const gameLeaderboardEntries = document.getElementById("gameLeaderboardEntries");
+const menuLeaderboardEntries = document.getElementById("menuLeaderboardEntries");
+
+const stakeButtons = document.querySelectorAll(".stakeBtn");
+
+const chatBox = document.getElementById("chatBox");
+const chatMessagesEl = document.getElementById("chatMessages");
+const chatInput = document.getElementById("chatInput");
+
+const authPanel = document.getElementById("authPanel");
+const authUsername = document.getElementById("authUsername");
+const authPassword = document.getElementById("authPassword");
+const registerBtn = document.getElementById("registerBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const authStatus = document.getElementById("authStatus");
+
+const walletValue = document.getElementById("walletValue");
+const walletAmountInput = document.getElementById("walletAmountInput");
+const withdrawAddressInput = document.getElementById("withdrawAddressInput");
+const addBalanceBtn = document.getElementById("addBalanceBtn");
+const withdrawBtn = document.getElementById("withdrawBtn");
+const walletStatus = document.getElementById("walletStatus");
+const menuStatus = document.getElementById("menuStatus");
+
+const toggleFriendSearchBtn = document.getElementById("toggleFriendSearchBtn");
+const friendSearchPanel = document.getElementById("friendSearchPanel");
+const friendSearchInput = document.getElementById("friendSearchInput");
+const friendSearchResults = document.getElementById("friendSearchResults");
+const friendsList = document.getElementById("friendsList");
+const friendRequestsList = document.getElementById("friendRequestsList");
+const friendsStatus = document.getElementById("friendsStatus");
+
+const privateChatCard = document.getElementById("privateChatCard");
+const privateChatTitle = document.getElementById("privateChatTitle");
+const privateChatMessages = document.getElementById("privateChatMessages");
+const privateChatInput = document.getElementById("privateChatInput");
+const sendPrivateChatBtn = document.getElementById("sendPrivateChatBtn");
+const closePrivateChatBtn = document.getElementById("closePrivateChatBtn");
+
+const menuMusic = document.getElementById("menuMusic");
+const menuMusicPlayer = document.getElementById("menuMusicPlayer");
+const musicSongName = document.getElementById("musicSongName");
+const musicCloseBtn = document.getElementById("musicCloseBtn");
+const musicPrevBtn = document.getElementById("musicPrevBtn");
+const musicPlayPauseBtn = document.getElementById("musicPlayPauseBtn");
+const musicNextBtn = document.getElementById("musicNextBtn");
+const musicVolumeRange = document.getElementById("musicVolumeRange");
+
+const rouletteOpenBtn = document.getElementById("rouletteOpenBtn");
+const rouletteOverlay = document.getElementById("rouletteOverlay");
+const closeRouletteBtn = document.getElementById("closeRouletteBtn");
+const rouletteBalanceValue = document.getElementById("rouletteBalanceValue");
+const rouletteAmountButtons = document.getElementById("rouletteAmountButtons");
+const rouletteBetRedBtn = document.getElementById("rouletteBetRedBtn");
+const rouletteBetBlackBtn = document.getElementById("rouletteBetBlackBtn");
+const rouletteSelectedBet = document.getElementById("rouletteSelectedBet");
+const rouletteNumberGrid = document.getElementById("rouletteNumberGrid");
+const rouletteSpinBtn = document.getElementById("rouletteSpinBtn");
+const rouletteStatus = document.getElementById("rouletteStatus");
+const rouletteResultValue = document.getElementById("rouletteResultValue");
+const rouletteWheelCanvas = document.getElementById("rouletteWheelCanvas");
+const rouletteWheelCtx = rouletteWheelCanvas ? rouletteWheelCanvas.getContext("2d") : null;
+
+// ── Blackjack DOM refs ──
+const blackjackOpenBtn = document.getElementById("blackjackOpenBtn");
+const blackjackOverlay = document.getElementById("blackjackOverlay");
+const closeBlackjackBtn = document.getElementById("closeBlackjackBtn");
+const bjBalanceValue = document.getElementById("bjBalanceValue");
+const bjAmountButtons = document.getElementById("bjAmountButtons");
+const bjDealBtn = document.getElementById("bjDealBtn");
+const bjActionButtons = document.getElementById("bjActionButtons");
+const bjHitBtn = document.getElementById("bjHitBtn");
+const bjStandBtn = document.getElementById("bjStandBtn");
+const bjDoubleBtn = document.getElementById("bjDoubleBtn");
+const bjStatus = document.getElementById("bjStatus");
+const bjDealerCards = document.getElementById("bjDealerCards");
+const bjPlayerCards = document.getElementById("bjPlayerCards");
+const bjDealerScore = document.getElementById("bjDealerScore");
+const bjPlayerScore = document.getElementById("bjPlayerScore");
+const bjResultBanner = document.getElementById("bjResultBanner");
+const bjBetDisplay = document.getElementById("bjBetDisplay");
+const bjDealerCanvas = document.getElementById("bjDealerCanvas");
+
+const toastContainer = document.getElementById("toastContainer");
+
+let W = (canvas.width = window.innerWidth);
+let H = (canvas.height = window.innerHeight);
+let isIntentionalReconnect = false;
+let selectedStake = 1;
+let friendSearchTimer = null;
+
+window.addEventListener("resize", () => {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
 });
 
-const WORLD_SIZE = 12000;
-const WORLD_RADIUS = WORLD_SIZE / 2;
-const FOOD_COUNT = 3000;
-const VIRUS_COUNT = 35;
-const BOT_COUNT = 8;
-const TICK_RATE = 45;
-const MAX_CELLS = 16;
-const SNAPSHOT_PADDING = 650;
-const MAX_CHAT_MESSAGES = 40;
-const START_MASS = 30;
-const REGISTER_BONUS = 5;
-const BOT_FOOD_CAP = 200;
+const state = {
+  extracting: false,
+  connected: false,
+  worldSize: 12000,
+  food: [],
+  viruses: [],
+  players: [],
+  leaderboard: [],
+  myId: null,
+  mouseX: 0,
+  mouseY: 0,
+  splitQueued: false,
+  ejectQueued: false,
+  cameraX: 0,
+  cameraY: 0,
+  zoom: 1,
+  wallet: 0,
+  menuWalletLeaderboard: [],
+  friends: [],
+  friendRequests: [],
+  privateChats: {},
+  activePrivateChat: null,
+  musicPlaylist: [],
+  currentTrackIndex: 0,
+  musicMuted: false,
+  musicVolume: 0.4,
+  musicReady: false,
+  rouletteOpen: false,
+  rouletteSpinning: false,
+  rouletteBetType: "color",
+  rouletteBetValue: "red",
+  rouletteBetAmount: 1,
+  rouletteRotation: 0,
+  bjOpen: false,
+  bjBetAmount: 1,
+  bjPlaying: false,
+  bjGame: null
+};
 
-const SPLIT_MERGE_DELAY_TICKS = 35 * TICK_RATE;
-const SPLIT_LAUNCH_SPEED = 34;
-const EJECT_LAUNCH_DISTANCE = 100;
-const EJECT_LAUNCH_SPEED = 26;
-const TOUCH_SEPARATION_FACTOR = 1.0;
-const PREMERGE_ATTRACTION_FACTOR = 0.006;
-const POSTMERGE_ATTRACTION_FACTOR = 0.04;
-const EJECT_ORB_MASS = START_MASS;
-const EXTRACTION_HOLD_TICKS = 6 * TICK_RATE;
-const EXTRACTION_PAYOUT_RATE = 0.95;
+const snapshots = [];
+const INTERPOLATION_DELAY = 16;
+const EXTRACTION_SECONDS = 6;
+const EXTRACTION_TICKS = 6 * 45;
 
-const ALLOWED_STAKES = [1, 5, 10, 20];
-const ALLOWED_PLAYER_COLORS = new Set([
-  "#111111",
-  "#ef4444",
-  "#ec4899",
-  "#8b5cf6",
-  "#facc15",
-  "#f97316",
-  "#8b5a2b",
-  "#9ca3af",
-  "#3b82f6"
-]);
+let isJoinInFlight = false;
+let inMatch = false;
+let chatOpen = false;
+let currentUser = null;
 
-const ROULETTE_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
-const BLACKJACK_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
+const ALLOWED_BALL_COLORS = [
+  { name: "Black", value: "#111111" },
+  { name: "Red", value: "#ef4444" },
+  { name: "Pink", value: "#ec4899" },
+  { name: "Purple", value: "#8b5cf6" },
+  { name: "Yellow", value: "#facc15" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Brown", value: "#8b5a2b" },
+  { name: "Grey", value: "#9ca3af" },
+  { name: "Blue", value: "#3b82f6" }
+];
+
+const DEFAULT_BALL_COLOR = "#3b82f6";
+
+const EURO_ROULETTE_ORDER = [
+  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
+  24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+];
+
 const ROULETTE_RED_NUMBERS = new Set([
   1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
 ]);
-
-const players = new Map();
-const playerByUserId = new Map();
-const socketsByUserId = new Map();
-const blackjackGames = new Map();
-
-const food = [];
-const viruses = [];
-const bots = [];
-const chatMessages = [];
 
 function radiusFromMass(mass) {
   return Math.sqrt(mass) * 4.8;
 }
 
-const EJECT_ORB_RADIUS = radiusFromMass(EJECT_ORB_MASS);
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
 
-const sessionMiddleware = session({
-  store: new PgSession({
-    pool,
-    tableName: "user_sessions",
-    createTableIfMissing: true
-  }),
-  secret: process.env.SESSION_SECRET || "change-this-secret-in-production",
-  resave: false,
-  saveUninitialized: false,
-  rolling: true,
-  cookie: {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 1000 * 60 * 60 * 24 * 14
+function formatBallMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+
+function getRouletteColor(number) {
+  if (number === 0) return "green";
+  return ROULETTE_RED_NUMBERS.has(Number(number)) ? "red" : "black";
+}
+
+function getRouletteBetLabel() {
+  if (state.rouletteBetType === "number") {
+    return `Number ${state.rouletteBetValue}`;
+  }
+  return String(state.rouletteBetValue || "red").replace(/^./, (m) => m.toUpperCase());
+}
+
+function setRouletteStatus(text, isError = false) {
+  if (!rouletteStatus) return;
+  rouletteStatus.textContent = text || "";
+  rouletteStatus.style.color = isError ? "#c62828" : "#607289";
+}
+
+function updateRouletteBalance() {
+  if (!rouletteBalanceValue) return;
+  rouletteBalanceValue.textContent = formatMoney(state.wallet);
+}
+
+function setRouletteBet(type, value) {
+  state.rouletteBetType = type;
+  state.rouletteBetValue = value;
+  renderRouletteUi();
+}
+
+function renderRouletteNumberButtons() {
+  if (!rouletteNumberGrid) return;
+  rouletteNumberGrid.innerHTML = EURO_ROULETTE_ORDER.map((number) => {
+    const color = getRouletteColor(number);
+    return `<button type="button" class="rouletteNumberBtn ${color}" data-roulette-number="${number}">${number}</button>`;
+  }).join("");
+}
+
+function renderRouletteUi() {
+  updateRouletteBalance();
+
+  document.querySelectorAll("[data-roulette-amount]").forEach((btn) => {
+    btn.classList.toggle("active", Number(btn.dataset.rouletteAmount) === state.rouletteBetAmount);
+    btn.disabled = state.rouletteSpinning;
+  });
+
+  rouletteBetRedBtn?.classList.toggle("active", state.rouletteBetType === "color" && state.rouletteBetValue === "red");
+  rouletteBetBlackBtn?.classList.toggle("active", state.rouletteBetType === "color" && state.rouletteBetValue === "black");
+
+  document.querySelectorAll("[data-roulette-number]").forEach((btn) => {
+    btn.classList.toggle("active", state.rouletteBetType === "number" && Number(btn.dataset.rouletteNumber) === Number(state.rouletteBetValue));
+    btn.disabled = state.rouletteSpinning;
+  });
+
+  if (rouletteBetRedBtn) rouletteBetRedBtn.disabled = state.rouletteSpinning;
+  if (rouletteBetBlackBtn) rouletteBetBlackBtn.disabled = state.rouletteSpinning;
+  if (rouletteSpinBtn) rouletteSpinBtn.disabled = state.rouletteSpinning || !currentUser || state.wallet < state.rouletteBetAmount;
+
+  if (rouletteSelectedBet) {
+    rouletteSelectedBet.textContent = `Betting on ${getRouletteBetLabel()} · $${state.rouletteBetAmount}`;
+  }
+
+  drawRouletteWheel(state.rouletteRotation || 0);
+}
+
+function drawRouletteWheel(rotationDeg = 0) {
+  if (!rouletteWheelCanvas || !rouletteWheelCtx) return;
+
+  const ctx = rouletteWheelCtx;
+  const width = rouletteWheelCanvas.width;
+  const height = rouletteWheelCanvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const outerR = Math.min(width, height) * 0.46;
+  const midR = outerR * 0.78;
+  const innerR = outerR * 0.56;
+  const hubR = outerR * 0.16;
+  const slice = (Math.PI * 2) / EURO_ROULETTE_ORDER.length;
+  const rot = (rotationDeg * Math.PI) / 180;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+
+  for (let i = 0; i < EURO_ROULETTE_ORDER.length; i += 1) {
+    const number = EURO_ROULETTE_ORDER[i];
+    const color = getRouletteColor(number);
+    const start = -Math.PI / 2 + i * slice;
+    const end = start + slice;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, outerR, start, end);
+    ctx.closePath();
+    ctx.fillStyle =
+      color === "green"
+        ? "#0ea75a"
+        : color === "red"
+          ? "#ef4444"
+          : "#111111";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, outerR, start, end);
+    ctx.arc(0, 0, midR, end, start, true);
+    ctx.closePath();
+    ctx.fillStyle =
+      color === "green"
+        ? "#0ebc68"
+        : color === "red"
+          ? "#ff4f5d"
+          : "#202530";
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.86)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(start) * midR, Math.sin(start) * midR);
+    ctx.lineTo(Math.cos(start) * outerR, Math.sin(start) * outerR);
+    ctx.stroke();
+
+    const center = start + slice / 2;
+    ctx.save();
+    ctx.rotate(center);
+    ctx.translate((midR + outerR) / 2, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = "#ffecc4";
+    ctx.font = "900 28px Ubuntu, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(number), 0, 0);
+    ctx.restore();
+  }
+
+  ctx.fillStyle = "#cfd5dd";
+  ctx.beginPath();
+  ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#a4adb7";
+  ctx.beginPath();
+  ctx.arc(0, 0, hubR * 1.65, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#edf2f7";
+  ctx.beginPath();
+  ctx.arc(0, 0, hubR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function animateRouletteToNumber(winningNumber) {
+  const index = EURO_ROULETTE_ORDER.indexOf(Number(winningNumber));
+  if (index < 0) return Promise.resolve();
+
+  const sliceDeg = 360 / EURO_ROULETTE_ORDER.length;
+  const centerDeg = -90 + index * sliceDeg + sliceDeg / 2;
+  const desiredNorm = ((-centerDeg % 360) + 360) % 360;
+  const current = Number(state.rouletteRotation || 0);
+  const currentNorm = ((current % 360) + 360) % 360;
+  let delta = desiredNorm - currentNorm;
+  if (delta < 0) delta += 360;
+  const target = current + 1800 + delta;
+
+  return new Promise((resolve) => {
+    const duration = 4600;
+    const start = performance.now();
+    const startRotation = current;
+
+    function frame(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      state.rouletteRotation = startRotation + (target - startRotation) * eased;
+      drawRouletteWheel(state.rouletteRotation);
+
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        state.rouletteRotation = target;
+        drawRouletteWheel(state.rouletteRotation);
+        resolve();
+      }
+    }
+
+    requestAnimationFrame(frame);
+  });
+}
+
+function openRouletteModal() {
+  if (!currentUser || !rouletteOverlay) return;
+  state.rouletteOpen = true;
+  rouletteOverlay.classList.remove("hidden");
+  updateRouletteBalance();
+  renderRouletteUi();
+  setRouletteStatus("Choose a bet and spin the wheel.");
+}
+
+function closeRouletteModal() {
+  if (!rouletteOverlay || state.rouletteSpinning) return;
+  state.rouletteOpen = false;
+  rouletteOverlay.classList.add("hidden");
+}
+
+async function handleRouletteSpin() {
+  if (state.rouletteSpinning) return;
+  if (!currentUser) {
+    setRouletteStatus("You need to be logged in.", true);
+    return;
+  }
+  if (state.wallet < state.rouletteBetAmount) {
+    setRouletteStatus("Not enough balance for that bet.", true);
+    return;
+  }
+
+  state.rouletteSpinning = true;
+  renderRouletteUi();
+  setRouletteStatus("Spinning...");
+
+  const payload = {
+    amount: state.rouletteBetAmount,
+    betType: state.rouletteBetType,
+    betValue: state.rouletteBetValue
+  };
+
+  try {
+    const data = await api("/api/casino/roulette/spin", payload);
+    if (data.error) {
+      state.rouletteSpinning = false;
+      renderRouletteUi();
+      setRouletteStatus(data.error, true);
+      return;
+    }
+
+    await animateRouletteToNumber(data.winningNumber);
+
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+    updateRouletteBalance();
+    renderRouletteUi();
+
+    const resultText = `${data.winningNumber} ${String(data.winningColor || "").replace(/^./, (m) => m.toUpperCase())}`;
+    if (rouletteResultValue) rouletteResultValue.textContent = resultText;
+
+    if (data.win) {
+      const payoutText = Number(data.payout || 0).toFixed(2);
+      setRouletteStatus(`You won $${payoutText}!`, false);
+      showToast(`Roulette win: ${resultText} · +$${payoutText}`);
+    } else {
+      setRouletteStatus(`You lost $${Number(data.amount || 0).toFixed(2)}.`, true);
+      showToast(`Roulette result: ${resultText}`);
+    }
+
+    await refreshMenuWalletLeaderboard();
+  } catch (err) {
+    console.error("ROULETTE SPIN ERROR:", err);
+    setRouletteStatus("Roulette spin failed.", true);
+  } finally {
+    state.rouletteSpinning = false;
+    renderRouletteUi();
+  }
+}
+
+// ─── BLACKJACK ────────────────────────────────────────────────────────────────
+
+const SUIT_COLORS = { "♠": "black", "♣": "black", "♥": "red", "♦": "red" };
+
+function updateBjBalance() {
+  if (bjBalanceValue) bjBalanceValue.textContent = formatMoney(state.wallet);
+}
+
+function setBjStatus(text, isError = false) {
+  if (!bjStatus) return;
+  bjStatus.textContent = text || "";
+  bjStatus.style.color = isError ? "#c62828" : "#607289";
+}
+
+function bjSuitColor(suit) {
+  return SUIT_COLORS[suit] === "red" ? "red" : "black";
+}
+
+function renderBjCard(card) {
+  if (!card || card.hidden) {
+    return `<div class="bjCard cardHidden"></div>`;
+  }
+  const cls = bjSuitColor(card.suit);
+  return `
+    <div class="bjCard ${cls}">
+      <div class="bjCardCorner top">
+        <div class="bjCardVal">${card.value}</div>
+        <div class="bjCardSuit">${card.suit}</div>
+      </div>
+      <div class="bjCardCenter">${card.suit}</div>
+      <div class="bjCardCorner bottom">
+        <div class="bjCardVal">${card.value}</div>
+        <div class="bjCardSuit">${card.suit}</div>
+      </div>
+    </div>`;
+}
+
+function renderBjHands(game) {
+  if (!game) return;
+  if (bjDealerCards) bjDealerCards.innerHTML = (game.dealerHand || []).map(renderBjCard).join("");
+  if (bjPlayerCards) bjPlayerCards.innerHTML = (game.playerHand || []).map(renderBjCard).join("");
+  if (bjDealerScore) bjDealerScore.textContent = game.dealerValue ?? "";
+  if (bjPlayerScore) bjPlayerScore.textContent = game.playerValue ?? "";
+  if (bjBetDisplay) bjBetDisplay.textContent = `Bet: ${formatMoney(game.bet || 0)}`;
+}
+
+function showBjResult(game) {
+  if (!bjResultBanner) return;
+  const s = game.status;
+  let cls, title, sub;
+  if (s === "blackjack")     { cls = "win";  title = "🃏 BLACKJACK!"; sub = `+${formatMoney(game.payout)}`; }
+  else if (s === "player_win") { cls = "win";  title = "🏆 YOU WIN!"; sub = `+${formatMoney(game.payout)}`; }
+  else if (s === "dealer_bust"){ cls = "win";  title = "💥 DEALER BUSTS!"; sub = `+${formatMoney(game.payout)}`; }
+  else if (s === "player_bust"){ cls = "lose"; title = "💀 BUST!"; sub = `-${formatMoney(game.bet)}`; }
+  else if (s === "dealer_win") { cls = "lose"; title = "😤 DEALER WINS"; sub = `-${formatMoney(game.bet)}`; }
+  else if (s === "push")       { cls = "push"; title = "🤝 PUSH"; sub = "Bet returned"; }
+  else return;
+
+  bjResultBanner.className = `bjResultBanner ${cls}`;
+  bjResultBanner.innerHTML = `${title}<div class="bjResultSub">${sub}</div>`;
+  bjResultBanner.classList.remove("hidden");
+}
+
+function hideBjResult() {
+  bjResultBanner?.classList.add("hidden");
+}
+
+function setBjPlaying(playing) {
+  state.bjPlaying = playing;
+  bjDealBtn?.classList.toggle("hidden", playing);
+  bjActionButtons?.classList.toggle("hidden", !playing);
+  document.querySelectorAll("[data-bj-amount]").forEach((b) => { b.disabled = playing; });
+  if (bjHitBtn)    bjHitBtn.disabled    = !playing;
+  if (bjStandBtn)  bjStandBtn.disabled  = !playing;
+  if (bjDoubleBtn) bjDoubleBtn.disabled = !playing;
+}
+
+function openBlackjackModal() {
+  if (!blackjackOverlay) {
+    console.error("blackjackOverlay element not found — make sure index.html is updated.");
+    return;
+  }
+  state.bjOpen = true;
+  blackjackOverlay.classList.remove("hidden");
+  updateBjBalance();
+  hideBjResult();
+  setBjStatus(currentUser ? "Choose your bet and deal." : "Log in to play.");
+  drawPixelDealer();
+}
+
+function closeBlackjackModal() {
+  if (!blackjackOverlay || state.bjPlaying) return;
+  state.bjOpen = false;
+  blackjackOverlay.classList.add("hidden");
+}
+
+/* ─ Pixel art dealer ─ */
+function drawPixelDealer() {
+  const cvs = bjDealerCanvas;
+  if (!cvs) return;
+  const c = cvs.getContext("2d");
+  const W = cvs.width, H = cvs.height;
+  c.clearRect(0, 0, W, H);
+
+  // Each "pixel" = 4px so the whole sprite fits in 80x100
+  const P = 4;
+  function px(col, row, w, h, color) {
+    c.fillStyle = color;
+    c.fillRect(col * P, row * P, (w || 1) * P, (h || 1) * P);
+  }
+
+  // Top hat brim
+  px(3, 4, 14, 1, "#d4af37");
+  // Hat crown
+  px(5, 0, 10, 5, "#1a1a2e");
+  // Hat band
+  px(5, 3, 10, 1, "#dc2626");
+
+  // Head
+  px(4, 5, 12, 7, "#c9956b");
+  // Hair top
+  px(4, 5, 12, 1, "#2c1810");
+  // Ears
+  px(3, 7, 1, 3, "#b8845a");
+  px(16, 7, 1, 3, "#b8845a");
+  // Eyebrows
+  px(6, 7, 3, 1, "#2c1810");
+  px(11, 7, 3, 1, "#2c1810");
+  // Eyes
+  px(6, 8, 3, 2, "#1a1a2e");
+  px(11, 8, 3, 2, "#1a1a2e");
+  // Eye shine
+  px(6, 8, 1, 1, "#ffffff");
+  px(11, 8, 1, 1, "#ffffff");
+  // Nose
+  px(9, 9, 2, 2, "#b07a52");
+  // Smile
+  px(7, 11, 1, 1, "#2c1810");
+  px(8, 12, 4, 1, "#2c1810");
+  px(12, 11, 1, 1, "#2c1810");
+
+  // Neck
+  px(8, 12, 4, 2, "#c9956b");
+
+  // Shirt collar / bow tie
+  px(7, 13, 2, 1, "#f0ede6");
+  px(11, 13, 2, 1, "#f0ede6");
+  px(8, 13, 1, 1, "#dc2626");
+  px(10, 13, 1, 1, "#dc2626");
+  px(9, 13, 2, 2, "#b91c1c");
+
+  // Jacket body
+  px(3, 14, 14, 10, "#1a1a2e");
+  // White shirt front
+  px(7, 14, 6, 8, "#f0ede6");
+  // Jacket lapels
+  px(5, 14, 2, 5, "#2d2d44");
+  px(13, 14, 2, 5, "#2d2d44");
+  // Buttons
+  px(9, 16, 2, 1, "#d4af37");
+  px(9, 18, 2, 1, "#d4af37");
+
+  // Arms
+  px(2, 15, 2, 7, "#1a1a2e");
+  px(16, 15, 2, 7, "#1a1a2e");
+  // Hands
+  px(2, 22, 2, 2, "#c9956b");
+  px(16, 22, 2, 2, "#c9956b");
+
+  // Suit symbol on chest
+  c.fillStyle = "#d4af37";
+  c.font = `bold ${P * 4}px serif`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText("♠", W / 2, H * 0.82);
+
+  // Shadow under character
+  c.fillStyle = "rgba(0,0,0,0.22)";
+  c.beginPath();
+  c.ellipse(W / 2, H - 4, 28, 5, 0, 0, Math.PI * 2);
+  c.fill();
+}
+
+async function bjDeal() {
+  if (!currentUser) { setBjStatus("Log in to play.", true); return; }
+  if (state.bjPlaying) return;
+
+  state.bjGame = null;
+  hideBjResult();
+  if (bjDealerCards) bjDealerCards.innerHTML = "";
+  if (bjPlayerCards) bjPlayerCards.innerHTML = "";
+  if (bjDealerScore) bjDealerScore.textContent = "";
+  if (bjPlayerScore) bjPlayerScore.textContent = "";
+
+  bjDealBtn.disabled = true;
+  setBjStatus("Dealing...");
+
+  try {
+    const data = await api("/api/casino/blackjack/start", { amount: state.bjBetAmount });
+    if (data.error) { setBjStatus(data.error, true); bjDealBtn.disabled = false; return; }
+
+    state.bjGame = data;
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+
+    renderBjHands(data);
+
+    if (data.status === "playing") {
+      setBjPlaying(true);
+      // Disable double if > 2 cards (shouldn't happen on deal but safe)
+      if (bjDoubleBtn) bjDoubleBtn.disabled = (data.playerHand.length !== 2);
+      setBjStatus("Hit, Stand, or Double Down?");
+    } else {
+      setBjPlaying(false);
+      showBjResult(data);
+      setBjGameOver(data);
+      bjDealBtn.disabled = false;
+      await refreshMenuWalletLeaderboard();
+    }
+  } catch (err) {
+    console.error("BJ DEAL ERROR:", err);
+    setBjStatus("Failed to deal.", true);
+    bjDealBtn.disabled = false;
+  }
+}
+
+async function bjHit() {
+  if (!state.bjPlaying) return;
+  setBjActionBusy(true);
+
+  try {
+    const data = await api("/api/casino/blackjack/hit", {});
+    if (data.error) { setBjStatus(data.error, true); setBjActionBusy(false); return; }
+    state.bjGame = data;
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+    renderBjHands(data);
+    if (data.status === "playing") {
+      if (bjDoubleBtn) bjDoubleBtn.disabled = true; // can't double after a hit
+      setBjActionBusy(false);
+      setBjStatus("Hit or Stand?");
+    } else {
+      setBjPlaying(false);
+      showBjResult(data);
+      setBjGameOver(data);
+      bjDealBtn.disabled = false;
+      await refreshMenuWalletLeaderboard();
+    }
+  } catch (err) {
+    console.error("BJ HIT ERROR:", err);
+    setBjStatus("Failed to hit.", true);
+    setBjActionBusy(false);
+  }
+}
+
+async function bjStand() {
+  if (!state.bjPlaying) return;
+  setBjActionBusy(true);
+
+  try {
+    const data = await api("/api/casino/blackjack/stand", {});
+    if (data.error) { setBjStatus(data.error, true); setBjActionBusy(false); return; }
+    state.bjGame = data;
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+    renderBjHands(data);
+    setBjPlaying(false);
+    showBjResult(data);
+    setBjGameOver(data);
+    bjDealBtn.disabled = false;
+    await refreshMenuWalletLeaderboard();
+  } catch (err) {
+    console.error("BJ STAND ERROR:", err);
+    setBjStatus("Failed to stand.", true);
+    setBjActionBusy(false);
+  }
+}
+
+async function bjDouble() {
+  if (!state.bjPlaying) return;
+  setBjActionBusy(true);
+
+  try {
+    const data = await api("/api/casino/blackjack/double", {});
+    if (data.error) { setBjStatus(data.error, true); setBjActionBusy(false); return; }
+    state.bjGame = data;
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+    renderBjHands(data);
+    setBjPlaying(false);
+    showBjResult(data);
+    setBjGameOver(data);
+    bjDealBtn.disabled = false;
+    await refreshMenuWalletLeaderboard();
+  } catch (err) {
+    console.error("BJ DOUBLE ERROR:", err);
+    setBjStatus("Failed to double.", true);
+    setBjActionBusy(false);
+  }
+}
+
+function setBjActionBusy(busy) {
+  if (bjHitBtn)    bjHitBtn.disabled    = busy;
+  if (bjStandBtn)  bjStandBtn.disabled  = busy;
+  if (bjDoubleBtn) bjDoubleBtn.disabled = busy;
+}
+
+function setBjGameOver(data) {
+  const s = data.status;
+  const msgMap = {
+    blackjack:   `Blackjack! You win ${formatMoney(data.payout)}!`,
+    player_win:  `You win ${formatMoney(data.payout)}!`,
+    dealer_bust: `Dealer busts! You win ${formatMoney(data.payout)}!`,
+    player_bust: `Bust! You lost ${formatMoney(data.bet)}.`,
+    dealer_win:  `Dealer wins. You lost ${formatMoney(data.bet)}.`,
+    push:        `Push — bet returned.`
+  };
+  setBjStatus(msgMap[s] || "Round over.", ["player_bust","dealer_win"].includes(s));
+  bjActionButtons?.classList.add("hidden");
+  bjDealBtn?.classList.remove("hidden");
+}
+
+// ─── Blackjack event listeners ────────────────────────────────────────────────
+
+blackjackOpenBtn?.addEventListener("click", openBlackjackModal);
+closeBlackjackBtn?.addEventListener("click", closeBlackjackModal);
+bjDealBtn?.addEventListener("click", bjDeal);
+bjHitBtn?.addEventListener("click", bjHit);
+bjStandBtn?.addEventListener("click", bjStand);
+bjDoubleBtn?.addEventListener("click", bjDouble);
+
+bjAmountButtons?.querySelectorAll("[data-bj-amount]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (state.bjPlaying) return;
+    state.bjBetAmount = Number(btn.dataset.bjAmount || 1);
+    bjAmountButtons.querySelectorAll("[data-bj-amount]").forEach((b) =>
+      b.classList.toggle("active", Number(b.dataset.bjAmount) === state.bjBetAmount)
+    );
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.bjOpen && !state.bjPlaying) {
+    closeBlackjackModal();
   }
 });
 
-app.use(express.json());
-app.use(sessionMiddleware);
-io.engine.use(sessionMiddleware);
+function waitForSocketConnect(timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    if (socket.connected) {
+      resolve();
+      return;
+    }
 
-app.use(express.static(PUBLIC_DIR));
-app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+    const onConnect = () => {
+      cleanup();
+      resolve();
+    };
 
-async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id BIGSERIAL PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      credits NUMERIC(12,2) NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+    const onError = (err) => {
+      cleanup();
+      reject(err || new Error("Socket connection failed."));
+    };
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS credit_transactions (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      type TEXT NOT NULL,
-      amount NUMERIC(12,2) NOT NULL,
-      note TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Socket connection timeout."));
+    }, timeoutMs);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id
-    ON credit_transactions(user_id)
-  `);
+    function cleanup() {
+      clearTimeout(timer);
+      socket.off("connect", onConnect);
+      socket.off("connect_error", onError);
+    }
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS friend_requests (
-      id BIGSERIAL PRIMARY KEY,
-      from_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      to_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (from_user_id, to_user_id)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS friends (
-      id BIGSERIAL PRIMARY KEY,
-      user_a BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      user_b BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (user_a, user_b)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS private_messages (
-      id BIGSERIAL PRIMARY KEY,
-      from_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      to_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      message TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+    socket.on("connect", onConnect);
+    socket.on("connect_error", onError);
+    socket.connect();
+  });
 }
 
-function rand(min, max) {
-  return Math.random() * (max - min) + min;
-}
+async function reconnectSocketAfterAuth() {
+  isIntentionalReconnect = true;
 
-function distance(ax, ay, bx, by) {
-  return Math.hypot(ax - bx, ay - by);
-}
-
-function distanceSq(ax, ay, bx, by) {
-  const dx = ax - bx;
-  const dy = ay - by;
-  return dx * dx + dy * dy;
-}
-
-function randomColor() {
-  const hue = Math.floor(rand(0, 360));
-  return `hsl(${hue}, 80%, 58%)`;
-}
-
-function sanitizePlayerColor(color) {
-  const normalized = String(color || "").trim().toLowerCase();
-  return ALLOWED_PLAYER_COLORS.has(normalized) ? normalized : "#3b82f6";
-}
-
-function randomPointInCircle(maxRadius) {
-  const angle = Math.random() * Math.PI * 2;
-  const radius = Math.sqrt(Math.random()) * maxRadius;
-  return {
-    x: Math.cos(angle) * radius,
-    y: Math.sin(angle) * radius
-  };
-}
-
-function clampToWorldCircle(x, y, radius = 0) {
-  const maxDist = Math.max(0, WORLD_RADIUS - radius);
-  const dist = Math.hypot(x, y) || 1;
-
-  if (dist <= maxDist) {
-    return { x, y };
+  if (socket.connected) {
+    socket.disconnect();
   }
 
-  const scale = maxDist / dist;
+  await waitForSocketConnect();
+  isIntentionalReconnect = false;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function api(path, body = null, method = null) {
+  const useMethod = method || (body ? "POST" : "GET");
+
+  const res = await fetch(path, {
+    method: useMethod,
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: "same-origin"
+  });
+
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+
+  if (!res.ok && !data.error) {
+    data.error = `Request failed (${res.status})`;
+  }
+
+  return data;
+}
+
+function setAuthStatus(text, isError = false) {
+  if (!authStatus) return;
+  authStatus.textContent = text || "";
+  authStatus.style.color = isError ? "#c62828" : "#2e7d32";
+}
+
+function setWalletStatus(text, isError = false) {
+  if (!walletStatus) return;
+  walletStatus.textContent = text || "";
+  walletStatus.style.color = isError ? "#c62828" : "#2e7d32";
+}
+
+function setMenuStatus(text, isError = false) {
+  if (!menuStatus) return;
+  menuStatus.textContent = text || "";
+  menuStatus.style.color = isError ? "#c62828" : "#2e7d32";
+}
+
+function setFriendsStatus(text, isError = false) {
+  if (!friendsStatus) return;
+  friendsStatus.textContent = text || "";
+  friendsStatus.style.color = isError ? "#c62828" : "#2e7d32";
+}
+
+function showToast(text) {
+  if (!toastContainer || !text) return;
+
+  const item = document.createElement("div");
+  item.className = "toastItem";
+  item.textContent = text;
+  toastContainer.appendChild(item);
+
+  setTimeout(() => {
+    item.remove();
+  }, 3500);
+}
+
+function showLandingOnly() {
+  landingScreen?.classList.remove("hidden");
+  authPanel?.classList.add("hidden");
+  menu?.classList.add("hidden");
+}
+
+function showLandingWithAuth() {
+  landingScreen?.classList.remove("hidden");
+  authPanel?.classList.remove("hidden");
+  menu?.classList.add("hidden");
+}
+
+function showMenu() {
+  landingScreen?.classList.add("hidden");
+  authPanel?.classList.add("hidden");
+  menu?.classList.remove("hidden");
+  tryStartMenuMusic();
+}
+
+function hideMenusForGame() {
+  landingScreen?.classList.add("hidden");
+  authPanel?.classList.add("hidden");
+  menu?.classList.add("hidden");
+  pauseMenuMusic();
+}
+
+function updateWalletUi(wallet) {
+  state.wallet = Number(wallet || 0);
+  if (walletValue) walletValue.textContent = formatMoney(state.wallet);
+  updateRouletteBalance();
+  renderRouletteUi();
+  updateBjBalance();
+}
+
+function setPlayButtonState(busy = false) {
+  if (!playBtn) return;
+  playBtn.disabled = busy;
+  playBtn.textContent = busy ? "Loading..." : "JOIN GAME";
+}
+
+function setAuthButtonsLoggedIn(loggedIn) {
+  logoutBtn?.classList.toggle("hidden", !loggedIn);
+  loginBtn?.classList.toggle("hidden", loggedIn);
+  registerBtn?.classList.toggle("hidden", loggedIn);
+}
+
+function resetGameVisualState() {
+  snapshots.length = 0;
+  state.food = [];
+  state.viruses = [];
+  state.players = [];
+  state.leaderboard = [];
+  state.cameraX = 0;
+  state.cameraY = 0;
+  state.zoom = 1;
+  state.extracting = false;
+  if (massValue) massValue.textContent = "0";
+  if (gameLeaderboardEntries) gameLeaderboardEntries.innerHTML = "";
+  setChatOpen(false);
+}
+
+function updateAuthUi(user) {
+  currentUser = user || null;
+  setAuthButtonsLoggedIn(!!user);
+  setPlayButtonState(false);
+  isJoinInFlight = false;
+
+  if (user) {
+    if (authUsername) authUsername.value = user.username || "";
+    if (authPassword) authPassword.value = "";
+    updateWalletUi(user.credits || 0);
+    setAuthStatus(`Logged in as ${user.username}`);
+    setMenuStatus("");
+    setWalletStatus("");
+    setFriendsStatus("");
+    showMenu();
+  } else {
+    if (authPassword) authPassword.value = "";
+    inMatch = false;
+    resetGameVisualState();
+    updateWalletUi(0);
+    setAuthStatus("Not logged in.", false);
+    setMenuStatus("");
+    setWalletStatus("");
+    setFriendsStatus("");
+    closePrivateChat();
+    showLandingOnly();
+    pauseMenuMusic();
+  }
+}
+
+async function refreshWallet() {
+  if (!currentUser) return;
+  const data = await api("/api/balance");
+  if (!data.error && typeof data.wallet !== "undefined") {
+    updateWalletUi(data.wallet);
+    currentUser.credits = Number(data.wallet || 0);
+  }
+}
+
+async function refreshMenuWalletLeaderboard() {
+  const data = await api("/api/leaderboard/wallet");
+  if (data.error) return;
+
+  state.menuWalletLeaderboard = Array.isArray(data.items) ? data.items : [];
+  renderMenuWalletLeaderboard();
+}
+
+function renderMenuWalletLeaderboard() {
+  if (!menuLeaderboardEntries) return;
+
+  if (!state.menuWalletLeaderboard.length) {
+    menuLeaderboardEntries.innerHTML = `<div class="emptyCardText">No players yet.</div>`;
+    return;
+  }
+
+  menuLeaderboardEntries.innerHTML = state.menuWalletLeaderboard
+    .map(
+      (entry, i) =>
+        `<div>${i + 1}. ${escapeHtml(entry.name)} - <span style="color:#17a34a;font-weight:800">${formatMoney(entry.wallet)}</span></div>`
+    )
+    .join("");
+}
+
+async function refreshFriendsList() {
+  if (!currentUser) return;
+
+  const data = await api("/api/friends/list");
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  state.friends = Array.isArray(data.items) ? data.items : [];
+  renderFriendsList();
+}
+
+async function refreshFriendRequests() {
+  if (!currentUser) return;
+
+  const data = await api("/api/friends/requests");
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  state.friendRequests = Array.isArray(data.items) ? data.items : [];
+  renderFriendRequests();
+}
+
+function renderFriendsList() {
+  if (!friendsList) return;
+
+  if (!state.friends.length) {
+    friendsList.innerHTML = `<div class="emptyCardText">No friends yet.</div>`;
+    return;
+  }
+
+  friendsList.innerHTML = state.friends
+    .map(
+      (friend) => `
+        <div class="friendRow">
+          <div class="friendName">${escapeHtml(friend.username)}</div>
+          <div class="friendActions">
+            <button class="friendBtnChat" data-open-chat="${escapeHtml(friend.username)}" type="button">Chat</button>
+            <button class="friendBtnRemove" data-remove-friend="${escapeHtml(friend.username)}" type="button">Remove</button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+
+  friendsList.querySelectorAll("[data-open-chat]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const username = btn.getAttribute("data-open-chat");
+      await openPrivateChat(username);
+    });
+  });
+
+  friendsList.querySelectorAll("[data-remove-friend]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const username = btn.getAttribute("data-remove-friend");
+      await removeFriend(username);
+    });
+  });
+}
+
+function renderFriendRequests() {
+  if (!friendRequestsList) return;
+
+  if (!state.friendRequests.length) {
+    friendRequestsList.innerHTML = `<div class="emptyCardText">No pending requests.</div>`;
+    return;
+  }
+
+  friendRequestsList.innerHTML = state.friendRequests
+    .map(
+      (req) => `
+        <div class="friendRequestRow">
+          <div class="friendName">${escapeHtml(req.fromUsername)}</div>
+          <div class="friendActions">
+            <button class="friendBtnAccept" data-accept-request="${req.id}" type="button">Accept</button>
+            <button class="friendBtnDeny" data-deny-request="${req.id}" type="button">Deny</button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+
+  friendRequestsList.querySelectorAll("[data-accept-request]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await acceptFriendRequest(Number(btn.getAttribute("data-accept-request")));
+    });
+  });
+
+  friendRequestsList.querySelectorAll("[data-deny-request]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await denyFriendRequest(Number(btn.getAttribute("data-deny-request")));
+    });
+  });
+}
+
+async function searchFriends(query) {
+  if (!friendSearchResults) return;
+
+  const q = String(query || "").trim();
+  if (!q) {
+    friendSearchResults.innerHTML = "";
+    return;
+  }
+
+  const data = await api(`/api/friends/search?q=${encodeURIComponent(q)}`, null, "GET");
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  if (!items.length) {
+    friendSearchResults.innerHTML = `<div class="emptyCardText">No matching accounts.</div>`;
+    return;
+  }
+
+  friendSearchResults.innerHTML = items
+    .map(
+      (user) => `
+        <div class="friendSearchRow">
+          <div class="friendName">${escapeHtml(user.username)}</div>
+          <div class="friendActions">
+            <button class="friendBtnAdd" data-add-friend="${escapeHtml(user.username)}" type="button">Add</button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+
+  friendSearchResults.querySelectorAll("[data-add-friend]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const username = btn.getAttribute("data-add-friend");
+      await sendFriendRequest(username);
+    });
+  });
+}
+
+async function sendFriendRequest(username) {
+  const data = await api("/api/friends/request", { username });
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  setFriendsStatus(`Friend request sent to ${username}.`);
+  showToast(`Friend request sent to ${username}`);
+}
+
+async function acceptFriendRequest(requestId) {
+  const data = await api("/api/friends/accept", { requestId });
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  setFriendsStatus("Friend request accepted.");
+  await Promise.all([refreshFriendsList(), refreshFriendRequests()]);
+}
+
+async function denyFriendRequest(requestId) {
+  const data = await api("/api/friends/deny", { requestId });
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  setFriendsStatus("Friend request denied.");
+  await refreshFriendRequests();
+}
+
+async function removeFriend(username) {
+  const data = await api("/api/friends/remove", { username });
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  setFriendsStatus(`${username} removed from friends.`);
+  if (state.activePrivateChat === username) {
+    closePrivateChat();
+  }
+  await refreshFriendsList();
+}
+
+function updateMenuMusicVisibility() {
+  if (!menuMusicPlayer) return;
+  menuMusicPlayer.classList.toggle("chatHidden", Boolean(state.activePrivateChat));
+}
+
+function renderPrivateChat() {
+  if (!privateChatCard || !privateChatMessages) return;
+
+  const friend = state.activePrivateChat;
+  if (!friend) {
+    privateChatCard.classList.add("hidden");
+    updateMenuMusicVisibility();
+    return;
+  }
+
+  privateChatCard.classList.remove("hidden");
+  updateMenuMusicVisibility();
+  privateChatTitle.textContent = `Chat with ${friend}`;
+
+  const items = state.privateChats[friend] || [];
+  privateChatMessages.innerHTML = items
+    .map((msg) => {
+      const mine = msg.fromUsername === currentUser?.username;
+      return `
+        <div class="privateMsg ${mine ? "me" : "them"}">
+          ${escapeHtml(msg.message)}
+        </div>
+      `;
+    })
+    .join("");
+
+  privateChatMessages.scrollTop = privateChatMessages.scrollHeight;
+}
+
+async function openPrivateChat(username) {
+  const data = await api(`/api/private-messages/${encodeURIComponent(username)}`, null, "GET");
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  state.activePrivateChat = username;
+  state.privateChats[username] = Array.isArray(data.items) ? data.items : [];
+  renderPrivateChat();
+}
+
+function closePrivateChat() {
+  state.activePrivateChat = null;
+  renderPrivateChat();
+}
+
+async function sendPrivateMessage() {
+  const toUsername = state.activePrivateChat;
+  const message = String(privateChatInput?.value || "").trim();
+
+  if (!toUsername || !message) return;
+
+  const data = await api("/api/private-messages/send", {
+    toUsername,
+    message
+  });
+
+  if (data.error) {
+    setFriendsStatus(data.error, true);
+    return;
+  }
+
+  if (!state.privateChats[toUsername]) {
+    state.privateChats[toUsername] = [];
+  }
+
+  state.privateChats[toUsername].push(data.item);
+  privateChatInput.value = "";
+  renderPrivateChat();
+}
+
+async function refreshMenuData() {
+  if (!currentUser) return;
+
+  const results = await Promise.allSettled([
+    refreshMenuWalletLeaderboard(),
+    refreshFriendsList(),
+    refreshFriendRequests(),
+    refreshWallet()
+  ]);
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("MENU DATA REFRESH ERROR:", result.reason);
+    }
+  }
+}
+
+async function loadMusicPlaylist() {
+  const data = await api("/api/music/playlist", null, "GET");
+  if (data.error) return;
+
+  state.musicPlaylist = Array.isArray(data.items) ? data.items : [];
+  state.musicReady = state.musicPlaylist.length > 0;
+
+  const savedIndex = Number(localStorage.getItem("pipo_music_index") || 0);
+  if (state.musicPlaylist.length > 0) {
+    state.currentTrackIndex = Math.max(0, Math.min(savedIndex, state.musicPlaylist.length - 1));
+    setCurrentTrack(state.currentTrackIndex, false);
+  } else {
+    if (musicSongName) musicSongName.textContent = "No song loaded";
+    if (musicPlayPauseBtn) musicPlayPauseBtn.textContent = "▶";
+  }
+}
+
+function loadMusicSettings() {
+  const savedMuted = localStorage.getItem("pipo_music_muted");
+  const savedVolume = localStorage.getItem("pipo_music_volume");
+
+  state.musicMuted = savedMuted === "true";
+  state.musicVolume = savedVolume ? Number(savedVolume) : 0.4;
+
+  if (musicVolumeRange) {
+    musicVolumeRange.value = String(state.musicVolume);
+  }
+
+  applyMusicSettings();
+}
+
+function applyMusicSettings() {
+  if (menuMusic) {
+    menuMusic.volume = state.musicMuted ? 0 : state.musicVolume;
+  }
+
+  localStorage.setItem("pipo_music_muted", String(state.musicMuted));
+  localStorage.setItem("pipo_music_volume", String(state.musicVolume));
+
+  updatePlayPauseButton();
+}
+
+function updatePlayPauseButton() {
+  if (!musicPlayPauseBtn || !menuMusic) return;
+
+  const isPlaying = !menuMusic.paused && !menuMusic.ended;
+  musicPlayPauseBtn.textContent = isPlaying ? "⏸" : "▶";
+}
+
+function setCurrentTrack(index, autoplay = false) {
+  if (!menuMusic || !state.musicPlaylist.length) return;
+
+  state.currentTrackIndex = (index + state.musicPlaylist.length) % state.musicPlaylist.length;
+  const track = state.musicPlaylist[state.currentTrackIndex];
+
+  menuMusic.src = track.url;
+  if (musicSongName) musicSongName.textContent = track.title || track.filename || "Unknown song";
+  localStorage.setItem("pipo_music_index", String(state.currentTrackIndex));
+
+  if (autoplay) {
+    tryStartMenuMusic();
+  } else {
+    updatePlayPauseButton();
+  }
+}
+
+async function tryStartMenuMusic() {
+  if (!menuMusic || !state.musicReady || !state.musicPlaylist.length) return;
+  if (inMatch) return;
+
+  try {
+    await menuMusic.play();
+    updatePlayPauseButton();
+  } catch {
+    updatePlayPauseButton();
+  }
+}
+
+function pauseMenuMusic() {
+  if (!menuMusic) return;
+  menuMusic.pause();
+  updatePlayPauseButton();
+}
+
+function toggleMusicPlayback() {
+  if (!menuMusic || !state.musicReady || !state.musicPlaylist.length) return;
+
+  if (menuMusic.paused) {
+    tryStartMenuMusic();
+  } else {
+    pauseMenuMusic();
+  }
+}
+
+function closeMusicPlayer() {
+  if (!menuMusicPlayer) return;
+  pauseMenuMusic();
+  menuMusicPlayer.classList.add("hidden");
+}
+
+function playNextTrack() {
+  if (!state.musicPlaylist.length) return;
+  setCurrentTrack(state.currentTrackIndex + 1, !inMatch);
+}
+
+function playPrevTrack() {
+  if (!state.musicPlaylist.length) return;
+  setCurrentTrack(state.currentTrackIndex - 1, !inMatch);
+}
+
+async function checkSession() {
+  try {
+    const data = await api("/api/me");
+    updateAuthUi(data.user || null);
+
+    if (data.user) {
+      await reconnectSocketAfterAuth();
+      await refreshMenuData();
+    }
+  } catch (err) {
+    console.error("SESSION CHECK ERROR:", err);
+    setAuthStatus("Failed to check session.", true);
+  }
+}
+
+const stateChatMessages = [];
+
+function renderChat() {
+  if (!chatMessagesEl) return;
+
+  chatMessagesEl.innerHTML = stateChatMessages
+    .map(
+      (msg) => `
+        <div class="chatMessage">
+          <span class="chatName">${escapeHtml(msg.name)}:</span>
+          <span>${escapeHtml(msg.text)}</span>
+        </div>
+      `
+    )
+    .join("");
+
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+}
+
+function pushChatMessage(msg) {
+  stateChatMessages.push(msg);
+  while (stateChatMessages.length > 40) {
+    stateChatMessages.shift();
+  }
+  renderChat();
+}
+
+function setChatOpen(open) {
+  chatOpen = !!open && inMatch;
+  if (!chatBox) return;
+
+  chatBox.style.display = chatOpen ? "block" : "none";
+
+  if (chatOpen && chatInput) {
+    setTimeout(() => chatInput.focus(), 0);
+  } else {
+    if (chatInput) chatInput.blur();
+  }
+}
+
+function spawnMoneySigns(container, count) {
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement("div");
+    el.className = "moneySign";
+    el.textContent = "$";
+    el.style.left = Math.random() * 100 + "%";
+    el.style.fontSize = 18 + Math.random() * 42 + "px";
+    el.style.animationDuration = 7 + Math.random() * 8 + "s";
+    el.style.animationDelay = Math.random() * 8 + "s";
+    container.appendChild(el);
+  }
+}
+
+function spawnBackgroundBalls(container, count) {
+  if (!container) return;
+
+  container.innerHTML = "";
+  const colors = ["#4db2ff", "#3bd36c", "#ffca28", "#b27cff", "#ff7aa8"];
+
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement("div");
+    el.className = "bgBall";
+
+    const size = 26 + Math.random() * 78;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.left = `${Math.random() * 100}%`;
+    el.style.background = `radial-gradient(circle at 30% 30%, #ffffff, ${color})`;
+    el.style.animationDuration = `${9 + Math.random() * 10}s`;
+    el.style.animationDelay = `${Math.random() * 8}s`;
+
+    container.appendChild(el);
+  }
+}
+
+function normalizeBallColor(color) {
+  const normalized = String(color || "").trim().toLowerCase();
+  const match = ALLOWED_BALL_COLORS.find((item) => item.value.toLowerCase() === normalized);
+  return match ? match.value : DEFAULT_BALL_COLOR;
+}
+
+function getBallColorMeta(color) {
+  const normalized = normalizeBallColor(color).toLowerCase();
+  return (
+    ALLOWED_BALL_COLORS.find((item) => item.value.toLowerCase() === normalized) ||
+    ALLOWED_BALL_COLORS[ALLOWED_BALL_COLORS.length - 1]
+  );
+}
+
+function setSelectedBallColor(color) {
+  if (!colorInput) return;
+
+  const meta = getBallColorMeta(color);
+  colorInput.value = meta.value;
+
+  document.querySelectorAll(".colorSwatch").forEach((btn) => {
+    const swatchColor = String(btn.getAttribute("data-color") || "").toLowerCase();
+    btn.classList.toggle("active", swatchColor === meta.value.toLowerCase());
+  });
+
+  updateColorPreview();
+}
+
+function updateColorPreview() {
+  if (!colorPreviewBall || !colorInput) return;
+
+  const meta = getBallColorMeta(colorInput.value);
+  colorPreviewBall.style.background = meta.value;
+
+  const previewName = document.getElementById("colorPreviewName");
+  if (previewName) {
+    previewName.textContent = meta.name;
+  }
+}
+
+function worldToScreen(x, y) {
   return {
-    x: x * scale,
-    y: y * scale
+    x: (x - state.cameraX) * state.zoom + W / 2,
+    y: (y - state.cameraY) * state.zoom + H / 2
   };
 }
 
-function randomSpawnCell() {
-  const p = randomPointInCircle(WORLD_RADIUS - 400);
-  return {
-    x: p.x,
-    y: p.y,
-    mass: START_MASS,
-    vx: 0,
-    vy: 0,
-    mergeTimer: 0
-  };
+function getMyPlayer() {
+  return state.players.find((p) => p.id === state.myId) || null;
 }
 
-function createFood() {
-  const p = randomPointInCircle(WORLD_RADIUS - 8);
-  return {
-    id: Math.random().toString(36).slice(2),
-    x: p.x,
-    y: p.y,
-    vx: 0,
-    vy: 0,
-    r: 8,
-    color: `hsl(${Math.floor(rand(0, 360))},85%,60%)`,
-    mass: 1
-  };
-}
+function getMyCenter() {
+  const me = getMyPlayer();
+  if (!me || !me.cells.length) return { x: 0, y: 0 };
 
-function createVirus() {
-  const p = randomPointInCircle(WORLD_RADIUS - 48);
-  return {
-    id: Math.random().toString(36).slice(2),
-    x: p.x,
-    y: p.y,
-    r: 48
-  };
-}
-
-function totalMass(entity) {
-  return entity.cells.reduce((sum, cell) => sum + cell.mass, 0);
-}
-
-function entityCenter(entity) {
   let total = 0;
   let sx = 0;
   let sy = 0;
 
-  for (const cell of entity.cells) {
+  for (const cell of me.cells) {
     total += cell.mass;
     sx += cell.x * cell.mass;
     sy += cell.y * cell.mass;
   }
 
-  if (total <= 0) return { x: 0, y: 0 };
   return { x: sx / total, y: sy / total };
 }
 
-function createHumanPlayer(socketId, user, payload) {
-  const requestedName = typeof payload === "object" ? payload?.name : payload;
-  const requestedColor = typeof payload === "object" ? payload?.color : null;
-  const safeName =
-    String(requestedName || user.username || "Player").trim().slice(0, 16) ||
-    "Player";
-
-  return {
-    kind: "human",
-    id: socketId,
-    userId: Number(user.id),
-    username: user.username,
-    name: safeName,
-    color: sanitizePlayerColor(requestedColor),
-    mouse: { x: 0, y: 0 },
-    wantsSplit: false,
-    wantsEject: false,
-    wantsExtract: false,
-    extracting: false,
-    extractTicks: 0,
-    cashValue: 0,
-    cells: [randomSpawnCell()],
-    alive: true,
-    joinedAt: Date.now()
-  };
+function getMyTotalMass() {
+  const me = getMyPlayer();
+  if (!me) return 0;
+  return me.cells.reduce((sum, c) => sum + c.mass, 0);
 }
 
-function createBot(index) {
-  return {
-    kind: "bot",
-    id: `bot-${index}-${Math.random().toString(36).slice(2, 8)}`,
-    name: `Bot ${index + 1}`,
-    color: randomColor(),
-    mouse: { x: 0, y: 0 },
-    wantsSplit: false,
-    wantsEject: false,
-    wantsExtract: false,
-    extracting: false,
-    extractTicks: 0,
-    cashValue: 0,
-    cells: [randomSpawnCell()],
-    alive: true,
-    botIndex: index
-  };
+function updateCamera() {
+  const me = getMyPlayer();
+  if (!me || !me.cells.length) return;
+
+  const center = getMyCenter();
+  const totalMass = getMyTotalMass();
+  const biggestCellMass = Math.max(...me.cells.map((c) => c.mass));
+  const biggestRadius = radiusFromMass(biggestCellMass);
+
+  state.cameraX += (center.x - state.cameraX) * 0.12;
+  state.cameraY += (center.y - state.cameraY) * 0.12;
+
+  const fitZoomX = (W * 0.22) / Math.max(biggestRadius, 1);
+  const fitZoomY = (H * 0.22) / Math.max(biggestRadius, 1);
+  const fitZoom = Math.min(fitZoomX, fitZoomY);
+  const massZoom = 1.1 / Math.pow(Math.max(totalMass, 20), 0.16);
+  const targetZoom = Math.min(fitZoom, massZoom);
+
+  state.zoom += (targetZoom - state.zoom) * 0.12;
+  state.zoom = Math.max(0.02, Math.min(1.2, state.zoom));
 }
 
-function isHuman(entity) {
-  return entity.kind === "human";
+function drawExtractionIndicator() {
+  const me = getMyPlayer();
+  if (!me || !me.extracting) return;
+
+  const center = getMyCenter();
+  const s = worldToScreen(center.x, center.y);
+
+  const progress = Math.max(0, Math.min(1, (me.extractTicks || 0) / EXTRACTION_TICKS));
+  const radius = 42;
+
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(0,0,0,0.16)";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, radius, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+  ctx.strokeStyle = "#39ff76";
+  ctx.lineWidth = 7;
+  ctx.stroke();
+
+  ctx.fillStyle = "#39ff76";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 14px Arial";
+  ctx.fillText(`Extracting ${Math.ceil((1 - progress) * EXTRACTION_SECONDS)}s`, s.x, s.y - 58);
 }
 
-function isBot(entity) {
-  return entity.kind === "bot";
+function drawGrid() {
+  const grid = 50 * state.zoom;
+  if (grid >= 8) {
+    const offsetX = ((-state.cameraX * state.zoom) % grid + grid) % grid;
+    const offsetY = ((-state.cameraY * state.zoom) % grid + grid) % grid;
+
+    ctx.strokeStyle = "#ececec";
+    ctx.lineWidth = 1;
+
+    for (let x = offsetX; x <= W; x += grid) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+
+    for (let y = offsetY; y <= H; y += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+  }
+
+  const center = worldToScreen(0, 0);
+  const radius = (state.worldSize / 2) * state.zoom;
+
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#cfcfcf";
+  ctx.lineWidth = 3;
+  ctx.stroke();
 }
 
-function addChatMessage(name, text) {
-  const cleanName = String(name || "Player").slice(0, 16);
-  const cleanText = String(text || "").trim().slice(0, 160);
-  if (!cleanText) return;
+function drawFood() {
+  for (const f of state.food) {
+    const s = worldToScreen(f.x, f.y);
+    const rr = f.r * state.zoom;
 
-  const msg = {
-    id: Math.random().toString(36).slice(2),
-    name: cleanName,
-    text: cleanText,
-    time: Date.now()
-  };
+    if (s.x < -rr || s.x > W + rr || s.y < -rr || s.y > H + rr) continue;
 
-  chatMessages.push(msg);
-  while (chatMessages.length > MAX_CHAT_MESSAGES) chatMessages.shift();
-  io.emit("chat", msg);
-}
-
-async function getUserByUsername(username) {
-  const { rows } = await pool.query(
-    `
-    SELECT id, username, password_hash, credits
-    FROM users
-    WHERE username = $1
-    `,
-    [username]
-  );
-
-  if (!rows[0]) return null;
-
-  return {
-    id: Number(rows[0].id),
-    username: rows[0].username,
-    password_hash: rows[0].password_hash,
-    credits: Number(rows[0].credits || 0)
-  };
-}
-
-async function getUserById(id) {
-  const { rows } = await pool.query(
-    `
-    SELECT id, username, credits
-    FROM users
-    WHERE id = $1
-    `,
-    [id]
-  );
-
-  if (!rows[0]) return null;
-
-  return {
-    id: Number(rows[0].id),
-    username: rows[0].username,
-    credits: Number(rows[0].credits || 0)
-  };
-}
-
-async function createUserWithBonus(username, passwordHash) {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const insertUser = await client.query(
-      `
-      INSERT INTO users (username, password_hash, credits)
-      VALUES ($1, $2, $3)
-      RETURNING id
-      `,
-      [username, passwordHash, REGISTER_BONUS]
-    );
-
-    const userId = Number(insertUser.rows[0].id);
-
-    await client.query(
-      `
-      INSERT INTO credit_transactions (user_id, type, amount, note)
-      VALUES ($1, $2, $3, $4)
-      `,
-      [userId, "register_bonus", REGISTER_BONUS, "Welcome bonus"]
-    );
-
-    await client.query("COMMIT");
-    return userId;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, rr, 0, Math.PI * 2);
+    ctx.fillStyle = f.color;
+    ctx.fill();
   }
 }
 
-async function addCreditsTx(userId, amount, type, note) {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const currentRes = await client.query(
-      `SELECT id, credits FROM users WHERE id = $1 FOR UPDATE`,
-      [userId]
-    );
-
-    if (!currentRes.rows[0]) {
-      throw new Error("USER_NOT_FOUND");
-    }
-
-    const currentCredits = Number(currentRes.rows[0].credits || 0);
-    const nextCredits = currentCredits + Number(amount);
-
-    await client.query(`UPDATE users SET credits = $1 WHERE id = $2`, [
-      nextCredits,
-      userId
-    ]);
-
-    await client.query(
-      `
-      INSERT INTO credit_transactions (user_id, type, amount, note)
-      VALUES ($1, $2, $3, $4)
-      `,
-      [userId, type, amount, note || null]
-    );
-
-    await client.query("COMMIT");
-    return nextCredits;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-async function spendCreditsTx(userId, amount, type, note) {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const currentRes = await client.query(
-      `SELECT id, credits FROM users WHERE id = $1 FOR UPDATE`,
-      [userId]
-    );
-
-    if (!currentRes.rows[0]) {
-      throw new Error("USER_NOT_FOUND");
-    }
-
-    const currentCredits = Number(currentRes.rows[0].credits || 0);
-    if (currentCredits < amount) {
-      const err = new Error("INSUFFICIENT_CREDITS");
-      err.code = "INSUFFICIENT_CREDITS";
-      throw err;
-    }
-
-    const nextCredits = currentCredits - Number(amount);
-
-    await client.query(`UPDATE users SET credits = $1 WHERE id = $2`, [
-      nextCredits,
-      userId
-    ]);
-
-    await client.query(
-      `
-      INSERT INTO credit_transactions (user_id, type, amount, note)
-      VALUES ($1, $2, $3, $4)
-      `,
-      [userId, type, -Math.abs(amount), note || null]
-    );
-
-    await client.query("COMMIT");
-    return nextCredits;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-async function getSessionUser(req) {
-  const raw = req.session?.user;
-  if (!raw?.id) return null;
-
-  const row = await getUserById(raw.id);
-  if (!row) return null;
-
-  req.session.user = {
-    id: row.id,
-    username: row.username,
-    credits: Number(row.credits || 0)
-  };
-
-  return req.session.user;
-}
-
-function getRouletteColor(number) {
-  if (Number(number) === 0) return "green";
-  return ROULETTE_RED_NUMBERS.has(Number(number)) ? "red" : "black";
-}
-
-function getRandomRouletteNumber() {
-  return Math.floor(Math.random() * 37);
-}
-
-// ─── BLACKJACK HELPERS ────────────────────────────────────────────────────────
-
-function bjCreateDeck() {
-  const suits = ["\u2660", "\u2665", "\u2666", "\u2663"];
-  const values = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
-  const deck = [];
-  for (const suit of suits) for (const value of values) deck.push({ suit, value });
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return deck;
-}
-
-function bjCardNum(card) {
-  if (!card || card.hidden) return 0;
-  if (["J","Q","K"].includes(card.value)) return 10;
-  if (card.value === "A") return 11;
-  return Number(card.value);
-}
-
-function bjHandValue(hand) {
-  let total = 0, aces = 0;
-  for (const card of hand) {
-    if (card.hidden) continue;
-    total += bjCardNum(card);
-    if (card.value === "A") aces++;
-  }
-  while (total > 21 && aces-- > 0) total -= 10;
-  return total;
-}
-
-function bjIsBlackjack(hand) {
-  return hand.length === 2 && bjHandValue(hand) === 21;
-}
-
-async function bjResolve(game) {
-  while (bjHandValue(game.dealerHand) < 17) {
-    game.dealerHand.push(game.deck.pop());
-  }
-  const pv = bjHandValue(game.playerHand);
-  const dv = bjHandValue(game.dealerHand);
-  let payout = 0, status;
-  if (dv > 21)      { status = "dealer_bust"; payout = game.bet * 2; }
-  else if (pv > dv) { status = "player_win";  payout = game.bet * 2; }
-  else if (dv > pv) { status = "dealer_win";  payout = 0; }
-  else              { status = "push";         payout = game.bet; }
-  game.status = status;
-  game.payout = payout;
-  if (payout > 0) {
-    const txType = status === "push" ? "blackjack_push" : "blackjack_win";
-    game.wallet = await addCreditsTx(
-      game.userId, payout, txType,
-      `Blackjack ${status}: $${payout.toFixed(2)}`
-    );
-  }
-}
-
-function bjPublicState(game, hideDealer) {
-  return {
-    playerHand: game.playerHand,
-    dealerHand: hideDealer ? [game.dealerHand[0], { hidden: true }] : game.dealerHand,
-    playerValue: bjHandValue(game.playerHand),
-    dealerValue: hideDealer ? bjCardNum(game.dealerHand[0]) : bjHandValue(game.dealerHand),
-    status: game.status,
-    bet: game.bet,
-    payout: game.payout || 0,
-    wallet: game.wallet
-  };
-}
-
-async function requireAuth(req, res, next) {
-  try {
-    const user = await getSessionUser(req);
-    if (!user) {
-      return res.status(401).json({ error: "You must be logged in." });
-    }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    console.error("AUTH ERROR:", err);
-    res.status(500).json({ error: "Authentication failed." });
-  }
-}
-
-async function areFriends(userIdA, userIdB) {
-  const a = Math.min(Number(userIdA), Number(userIdB));
-  const b = Math.max(Number(userIdA), Number(userIdB));
-
-  const { rows } = await pool.query(
-    `SELECT id FROM friends WHERE user_a = $1 AND user_b = $2 LIMIT 1`,
-    [a, b]
-  );
-
-  return !!rows[0];
-}
-
-function sendFriendNotificationToUser(userId, payload) {
-  const socketId = socketsByUserId.get(Number(userId));
-  if (!socketId) return;
-
-  const sock = io.sockets.sockets.get(socketId);
-  if (!sock) return;
-
-  sock.emit("friendNotification", payload);
-}
-
-function sendPrivateMessageToUser(userId, payload) {
-  const socketId = socketsByUserId.get(Number(userId));
-  if (!socketId) return;
-
-  const sock = io.sockets.sockets.get(socketId);
-  if (!sock) return;
-
-  sock.emit("privateMessage", payload);
-}
-
-function getMusicPlaylist() {
-  try {
-    if (!fs.existsSync(AUDIO_DIR)) {
-      return [];
-    }
-
-    const files = fs
-      .readdirSync(AUDIO_DIR, { withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => entry.name)
-      .filter((name) => name.toLowerCase().endsWith(".mp3"))
-      .sort((a, b) => a.localeCompare(b));
-
-    return files.map((filename, index) => ({
-      id: index + 1,
-      title: filename.replace(/\.mp3$/i, ""),
-      filename,
-      url: `/audio/${encodeURIComponent(filename)}`
-    }));
-  } catch (err) {
-    console.error("MUSIC PLAYLIST ERROR:", err);
-    return [];
-  }
-}
-
-app.get("/api/music/playlist", (req, res) => {
-  res.json({
-    ok: true,
-    items: getMusicPlaylist()
-  });
-});
-
-app.post("/api/register", async (req, res) => {
-  try {
-    const username = String(req.body?.username || "").trim();
-    const password = String(req.body?.password || "");
-
-    if (username.length < 3 || username.length > 20) {
-      return res.status(400).json({ error: "Username must be 3-20 characters." });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters." });
-    }
-
-    const existing = await getUserByUsername(username);
-    if (existing) {
-      return res.status(409).json({ error: "Username already exists." });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    const userId = await createUserWithBonus(username, passwordHash);
-    const user = await getUserById(userId);
-
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      credits: Number(user.credits || 0)
-    };
-    req.session.gameEntryReady = false;
-    req.session.gameEntryStake = null;
-
-    req.session.save((saveErr) => {
-      if (saveErr) {
-        console.error("REGISTER SESSION SAVE ERROR:", saveErr);
-        return res.status(500).json({ error: "Failed to register." });
-      }
-
-      res.json({
-        ok: true,
-        user: req.session.user,
-        bonusCredits: REGISTER_BONUS
-      });
-    });
-  } catch (err) {
-    console.error("REGISTER ERROR:", err);
-    res.status(500).json({ error: "Failed to register." });
-  }
-});
-
-app.post("/api/login", async (req, res) => {
-  try {
-    const username = String(req.body?.username || "").trim();
-    const password = String(req.body?.password || "");
-
-    const user = await getUserByUsername(username);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid username or password." });
-    }
-
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      return res.status(401).json({ error: "Invalid username or password." });
-    }
-
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      credits: Number(user.credits || 0)
-    };
-    req.session.gameEntryReady = false;
-    req.session.gameEntryStake = null;
-
-    req.session.save((saveErr) => {
-      if (saveErr) {
-        console.error("LOGIN SESSION SAVE ERROR:", saveErr);
-        return res.status(500).json({ error: "Failed to log in." });
-      }
-
-      res.json({ ok: true, user: req.session.user });
-    });
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    res.status(500).json({ error: "Failed to log in." });
-  }
-});
-
-app.post("/api/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.json({ ok: true });
-  });
-});
-
-app.get("/api/me", async (req, res) => {
-  try {
-    const user = await getSessionUser(req);
-    res.json({ user: user || null });
-  } catch (err) {
-    console.error("ME ERROR:", err);
-    res.status(500).json({ user: null });
-  }
-});
-
-app.get("/api/balance", requireAuth, (req, res) => {
-  res.json({ ok: true, wallet: Number(req.user.credits || 0) });
-});
-
-app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
-  try {
-    const amount = Number(req.body?.amount);
-    const betType = String(req.body?.betType || "").trim().toLowerCase();
-    const rawBetValue = req.body?.betValue;
-
-    if (!ROULETTE_ALLOWED_BET_AMOUNTS.has(amount)) {
-      return res.status(400).json({ error: "Roulette bets must be between $1 and $5." });
-    }
-
-    if (!["color", "number"].includes(betType)) {
-      return res.status(400).json({ error: "Invalid roulette bet type." });
-    }
-
-    let betValue;
-    if (betType === "color") {
-      betValue = String(rawBetValue || "").trim().toLowerCase();
-      if (!["red", "black"].includes(betValue)) {
-        return res.status(400).json({ error: "Color bets must be red or black." });
-      }
-    } else {
-      betValue = Number(rawBetValue);
-      if (!Number.isInteger(betValue) || betValue < 0 || betValue > 36) {
-        return res.status(400).json({ error: "Number bets must be between 0 and 36." });
-      }
-    }
-
-    let wallet = await spendCreditsTx(
-      req.user.id,
-      amount,
-      "roulette_bet",
-      betType === "color" ? `Roulette ${betValue}` : `Roulette number ${betValue}`
-    );
-
-    const winningNumber = getRandomRouletteNumber();
-    const winningColor = getRouletteColor(winningNumber);
-
-    let win = false;
-    let payout = 0;
-
-    if (betType === "color") {
-      win = winningColor !== "green" && betValue === winningColor;
-      payout = win ? amount * 2 : 0;
-    } else {
-      win = Number(betValue) === winningNumber;
-      payout = win ? amount * 36 : 0;
-    }
-
-    if (payout > 0) {
-      wallet = await addCreditsTx(
-        req.user.id,
-        payout,
-        "roulette_win",
-        `Roulette win on ${winningNumber} ${winningColor}`
-      );
-    }
-
-    req.session.user.credits = wallet;
-
-    res.json({
-      ok: true,
-      wallet,
-      amount,
-      betType,
-      betValue,
-      winningNumber,
-      winningColor,
-      win,
-      payout,
-      profit: payout - amount
-    });
-  } catch (err) {
-    if (err?.code === "INSUFFICIENT_CREDITS") {
-      return res.status(400).json({ error: "Not enough balance." });
-    }
-
-    console.error("ROULETTE SPIN ERROR:", err);
-    res.status(500).json({ error: "Failed to spin roulette." });
-  }
-});
-
-// ─── BLACKJACK ROUTES ─────────────────────────────────────────────────────────
-
-app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
-  try {
-    const amount = Number(req.body?.amount);
-    if (!BLACKJACK_ALLOWED_BET_AMOUNTS.has(amount)) {
-      return res.status(400).json({ error: "Blackjack bets must be between $1 and $5." });
-    }
-    const existing = blackjackGames.get(req.user.id);
-    if (existing && existing.status === "playing") {
-      return res.status(400).json({ error: "Finish your current hand first." });
-    }
-    const wallet = await spendCreditsTx(
-      req.user.id, amount, "blackjack_bet", `Blackjack bet $${amount}`
-    );
-    const deck = bjCreateDeck();
-    const playerHand = [deck.pop(), deck.pop()];
-    const dealerHand = [deck.pop(), deck.pop()];
-    const game = {
-      userId: req.user.id, bet: amount, deck,
-      playerHand, dealerHand, status: "playing", wallet, payout: 0
-    };
-
-    if (bjIsBlackjack(playerHand)) {
-      if (bjIsBlackjack(dealerHand)) {
-        game.wallet = await addCreditsTx(req.user.id, amount, "blackjack_push", "Blackjack push");
-        game.status = "push"; game.payout = amount;
-      } else {
-        const payout = Math.round(amount * 2.5);
-        game.wallet = await addCreditsTx(req.user.id, payout, "blackjack_win", `Blackjack! $${payout}`);
-        game.status = "blackjack"; game.payout = payout;
-      }
-    }
-
-    blackjackGames.set(req.user.id, game);
-    req.session.user.credits = game.wallet;
-    res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
-  } catch (err) {
-    if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance." });
-    console.error("BLACKJACK START ERROR:", err);
-    res.status(500).json({ error: "Failed to start game." });
-  }
-});
-
-app.post("/api/casino/blackjack/hit", requireAuth, async (req, res) => {
-  try {
-    const game = blackjackGames.get(req.user.id);
-    if (!game || game.status !== "playing") {
-      return res.status(400).json({ error: "No active game." });
-    }
-    game.playerHand.push(game.deck.pop());
-    const pv = bjHandValue(game.playerHand);
-    if (pv > 21) {
-      game.status = "player_bust"; game.payout = 0;
-    } else if (pv === 21) {
-      await bjResolve(game);
-    }
-    req.session.user.credits = game.wallet;
-    res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
-  } catch (err) {
-    console.error("BLACKJACK HIT ERROR:", err);
-    res.status(500).json({ error: "Failed to process hit." });
-  }
-});
-
-app.post("/api/casino/blackjack/stand", requireAuth, async (req, res) => {
-  try {
-    const game = blackjackGames.get(req.user.id);
-    if (!game || game.status !== "playing") {
-      return res.status(400).json({ error: "No active game." });
-    }
-    await bjResolve(game);
-    req.session.user.credits = game.wallet;
-    res.json({ ok: true, ...bjPublicState(game, false) });
-  } catch (err) {
-    console.error("BLACKJACK STAND ERROR:", err);
-    res.status(500).json({ error: "Failed to process stand." });
-  }
-});
-
-app.post("/api/casino/blackjack/double", requireAuth, async (req, res) => {
-  try {
-    const game = blackjackGames.get(req.user.id);
-    if (!game || game.status !== "playing") {
-      return res.status(400).json({ error: "No active game." });
-    }
-    if (game.playerHand.length !== 2) {
-      return res.status(400).json({ error: "Can only double on the first two cards." });
-    }
-    const freshUser = await getUserById(req.user.id);
-    if (Number(freshUser?.credits || 0) < game.bet) {
-      return res.status(400).json({ error: "Not enough balance to double down." });
-    }
-    game.wallet = await spendCreditsTx(
-      req.user.id, game.bet, "blackjack_double", `Blackjack double down $${game.bet}`
-    );
-    game.bet = game.bet * 2;
-    game.playerHand.push(game.deck.pop());
-    const pv = bjHandValue(game.playerHand);
-    if (pv > 21) {
-      game.status = "player_bust"; game.payout = 0;
-    } else {
-      await bjResolve(game);
-    }
-    req.session.user.credits = game.wallet;
-    res.json({ ok: true, ...bjPublicState(game, false) });
-  } catch (err) {
-    if (err?.code === "INSUFFICIENT_CREDITS") {
-      return res.status(400).json({ error: "Not enough balance to double down." });
-    }
-    console.error("BLACKJACK DOUBLE ERROR:", err);
-    res.status(500).json({ error: "Failed to process double." });
-  }
-});
-
-
-app.get("/api/leaderboard/wallet", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT username, credits
-      FROM users
-      ORDER BY credits DESC, username ASC
-      LIMIT 10
-    `);
-
-    res.json({
-      ok: true,
-      items: rows.map((row) => ({
-        name: row.username,
-        wallet: Number(row.credits || 0)
-      }))
-    });
-  } catch (err) {
-    console.error("WALLET LEADERBOARD ERROR:", err);
-    res.status(500).json({ error: "Failed to load wallet leaderboard." });
-  }
-});
-
-app.get("/api/credits/history", requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `
-      SELECT id, type, amount, note, created_at
-      FROM credit_transactions
-      WHERE user_id = $1
-      ORDER BY id DESC
-      LIMIT 50
-      `,
-      [req.user.id]
-    );
-
-    res.json({
-      ok: true,
-      items: rows.map((row) => ({
-        id: Number(row.id),
-        type: row.type,
-        amount: Number(row.amount),
-        note: row.note,
-        created_at: row.created_at
-      }))
-    });
-  } catch (err) {
-    console.error("CREDITS HISTORY ERROR:", err);
-    res.status(500).json({ error: "Failed to load history." });
-  }
-});
-
-app.post("/api/credits/add", requireAuth, async (req, res) => {
-  try {
-    const amount = Number(req.body?.amount || 0);
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: "Invalid amount." });
-    }
-
-    const wallet = await addCreditsTx(
-      req.user.id,
-      amount,
-      "manual_add",
-      "Manual wallet top-up"
-    );
-
-    req.session.user.credits = wallet;
-    req.session.save(() => {});
-    res.json({ ok: true, wallet });
-  } catch (err) {
-    console.error("ADD CREDITS ERROR:", err);
-    res.status(500).json({ error: "Failed to add balance." });
-  }
-});
-
-app.post("/api/credits/withdraw", requireAuth, async (req, res) => {
-  try {
-    const amount = Number(req.body?.amount || 0);
-    const address = String(req.body?.address || "").trim();
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ error: "Invalid amount." });
-    }
-
-    if (!address) {
-      return res.status(400).json({ error: "Missing Solana wallet address." });
-    }
-
-    const wallet = await spendCreditsTx(
-      req.user.id,
-      amount,
-      "withdraw_request",
-      `Withdrawal request to ${address}`
-    );
-
-    req.session.user.credits = wallet;
-    req.session.save(() => {});
-    res.json({ ok: true, wallet, status: "requested" });
-  } catch (err) {
-    if (err.code === "INSUFFICIENT_CREDITS") {
-      return res.status(400).json({ error: "Not enough balance." });
-    }
-
-    console.error("WITHDRAW ERROR:", err);
-    res.status(500).json({ error: "Failed to create withdrawal request." });
-  }
-});
-
-app.post("/api/payments/solana/quote", requireAuth, (req, res) => {
-  const euros = Number(req.body?.euros || 0);
-
-  if (!Number.isFinite(euros) || euros <= 0) {
-    return res.status(400).json({ error: "Invalid amount." });
-  }
-
-  res.json({
-    ok: true,
-    euros,
-    credits: euros,
-    note: "1 euro = 1 wallet credit",
-    message: "Quote only. On-chain Solana verification still needs to be implemented."
-  });
-});
-
-app.get("/api/friends/search", requireAuth, async (req, res) => {
-  try {
-    const q = String(req.query.q || "").trim();
-    if (!q) return res.json({ ok: true, items: [] });
-
-    const { rows } = await pool.query(
-      `
-      SELECT id, username
-      FROM users
-      WHERE username ILIKE $1
-        AND id <> $2
-      ORDER BY username ASC
-      LIMIT 10
-      `,
-      [`%${q}%`, req.user.id]
-    );
-
-    res.json({
-      ok: true,
-      items: rows.map((r) => ({
-        id: Number(r.id),
-        username: r.username
-      }))
-    });
-  } catch (err) {
-    console.error("FRIEND SEARCH ERROR:", err);
-    res.status(500).json({ error: "Failed to search users." });
-  }
-});
-
-app.get("/api/friends/list", requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `
-      SELECT u.id, u.username
-      FROM friends f
-      JOIN users u
-        ON u.id = CASE
-          WHEN f.user_a = $1 THEN f.user_b
-          ELSE f.user_a
-        END
-      WHERE f.user_a = $1 OR f.user_b = $1
-      ORDER BY u.username ASC
-      `,
-      [req.user.id]
-    );
-
-    res.json({
-      ok: true,
-      items: rows.map((r) => ({
-        id: Number(r.id),
-        username: r.username
-      }))
-    });
-  } catch (err) {
-    console.error("FRIENDS LIST ERROR:", err);
-    res.status(500).json({ error: "Failed to load friends." });
-  }
-});
-
-app.get("/api/friends/requests", requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `
-      SELECT fr.id, u.username AS from_username
-      FROM friend_requests fr
-      JOIN users u ON u.id = fr.from_user_id
-      WHERE fr.to_user_id = $1 AND fr.status = 'pending'
-      ORDER BY fr.created_at DESC
-      `,
-      [req.user.id]
-    );
-
-    res.json({
-      ok: true,
-      items: rows.map((r) => ({
-        id: Number(r.id),
-        fromUsername: r.from_username
-      }))
-    });
-  } catch (err) {
-    console.error("GET FRIEND REQUESTS ERROR:", err);
-    res.status(500).json({ error: "Failed to load friend requests." });
-  }
-});
-
-app.post("/api/friends/request", requireAuth, async (req, res) => {
-  try {
-    const username = String(req.body?.username || "").trim();
-    if (!username) {
-      return res.status(400).json({ error: "Missing username." });
-    }
-
-    const target = await getUserByUsername(username);
-    if (!target) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    if (Number(target.id) === Number(req.user.id)) {
-      return res.status(400).json({ error: "You cannot add yourself." });
-    }
-
-    const a = Math.min(req.user.id, target.id);
-    const b = Math.max(req.user.id, target.id);
-
-    const alreadyFriends = await pool.query(
-      `SELECT id FROM friends WHERE user_a = $1 AND user_b = $2`,
-      [a, b]
-    );
-
-    if (alreadyFriends.rows[0]) {
-      return res.status(400).json({ error: "Already friends." });
-    }
-
-    await pool.query(
-      `
-      INSERT INTO friend_requests (from_user_id, to_user_id, status)
-      VALUES ($1, $2, 'pending')
-      ON CONFLICT (from_user_id, to_user_id)
-      DO UPDATE SET status = 'pending'
-      `,
-      [req.user.id, target.id]
-    );
-
-    sendFriendNotificationToUser(target.id, {
-      type: "friend_request",
-      fromUsername: req.user.username
-    });
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("SEND FRIEND REQUEST ERROR:", err);
-    res.status(500).json({ error: "Failed to send friend request." });
-  }
-});
-
-app.post("/api/friends/accept", requireAuth, async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    const requestId = Number(req.body?.requestId || 0);
-    if (!requestId) {
-      return res.status(400).json({ error: "Invalid request id." });
-    }
-
-    await client.query("BEGIN");
-
-    const reqRow = await client.query(
-      `
-      SELECT *
-      FROM friend_requests
-      WHERE id = $1 AND to_user_id = $2 AND status = 'pending'
-      FOR UPDATE
-      `,
-      [requestId, req.user.id]
-    );
-
-    const fr = reqRow.rows[0];
-    if (!fr) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Friend request not found." });
-    }
-
-    const a = Math.min(Number(fr.from_user_id), Number(fr.to_user_id));
-    const b = Math.max(Number(fr.from_user_id), Number(fr.to_user_id));
-
-    await client.query(
-      `
-      INSERT INTO friends (user_a, user_b)
-      VALUES ($1, $2)
-      ON CONFLICT (user_a, user_b) DO NOTHING
-      `,
-      [a, b]
-    );
-
-    await client.query(
-      `UPDATE friend_requests SET status = 'accepted' WHERE id = $1`,
-      [requestId]
-    );
-
-    await client.query("COMMIT");
-
-    sendFriendNotificationToUser(Number(fr.from_user_id), {
-      type: "friend_accept",
-      fromUsername: req.user.username
-    });
-
-    res.json({ ok: true });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("ACCEPT FRIEND REQUEST ERROR:", err);
-    res.status(500).json({ error: "Failed to accept friend request." });
-  } finally {
-    client.release();
-  }
-});
-
-app.post("/api/friends/deny", requireAuth, async (req, res) => {
-  try {
-    const requestId = Number(req.body?.requestId || 0);
-    if (!requestId) {
-      return res.status(400).json({ error: "Invalid request id." });
-    }
-
-    await pool.query(
-      `
-      UPDATE friend_requests
-      SET status = 'denied'
-      WHERE id = $1 AND to_user_id = $2 AND status = 'pending'
-      `,
-      [requestId, req.user.id]
-    );
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("DENY FRIEND REQUEST ERROR:", err);
-    res.status(500).json({ error: "Failed to deny request." });
-  }
-});
-
-app.post("/api/friends/remove", requireAuth, async (req, res) => {
-  try {
-    const username = String(req.body?.username || "").trim();
-    if (!username) {
-      return res.status(400).json({ error: "Missing username." });
-    }
-
-    const target = await getUserByUsername(username);
-    if (!target) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const a = Math.min(req.user.id, target.id);
-    const b = Math.max(req.user.id, target.id);
-
-    await pool.query(
-      `DELETE FROM friends WHERE user_a = $1 AND user_b = $2`,
-      [a, b]
-    );
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("REMOVE FRIEND ERROR:", err);
-    res.status(500).json({ error: "Failed to remove friend." });
-  }
-});
-
-app.get("/api/private-messages/:username", requireAuth, async (req, res) => {
-  try {
-    const targetUsername = String(req.params.username || "").trim();
-    if (!targetUsername) {
-      return res.status(400).json({ error: "Missing username." });
-    }
-
-    const target = await getUserByUsername(targetUsername);
-    if (!target) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const friends = await areFriends(req.user.id, target.id);
-    if (!friends) {
-      return res.status(403).json({ error: "You can only message friends." });
-    }
-
-    const { rows } = await pool.query(
-      `
-      SELECT pm.id, pm.from_user_id, pm.to_user_id, pm.message, pm.created_at,
-             fu.username AS from_username,
-             tu.username AS to_username
-      FROM private_messages pm
-      JOIN users fu ON fu.id = pm.from_user_id
-      JOIN users tu ON tu.id = pm.to_user_id
-      WHERE
-        (pm.from_user_id = $1 AND pm.to_user_id = $2)
-        OR
-        (pm.from_user_id = $2 AND pm.to_user_id = $1)
-      ORDER BY pm.created_at ASC
-      LIMIT 100
-      `,
-      [req.user.id, target.id]
-    );
-
-    res.json({
-      ok: true,
-      items: rows.map((r) => ({
-        id: Number(r.id),
-        fromUserId: Number(r.from_user_id),
-        toUserId: Number(r.to_user_id),
-        fromUsername: r.from_username,
-        toUsername: r.to_username,
-        message: r.message,
-        createdAt: r.created_at
-      }))
-    });
-  } catch (err) {
-    console.error("GET PRIVATE MESSAGES ERROR:", err);
-    res.status(500).json({ error: "Failed to load conversation." });
-  }
-});
-
-app.post("/api/private-messages/send", requireAuth, async (req, res) => {
-  try {
-    const toUsername = String(req.body?.toUsername || "").trim();
-    const message = String(req.body?.message || "").trim().slice(0, 500);
-
-    if (!toUsername) {
-      return res.status(400).json({ error: "Missing username." });
-    }
-
-    if (!message) {
-      return res.status(400).json({ error: "Message cannot be empty." });
-    }
-
-    const target = await getUserByUsername(toUsername);
-    if (!target) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const friends = await areFriends(req.user.id, target.id);
-    if (!friends) {
-      return res.status(403).json({ error: "You can only message friends." });
-    }
-
-    const { rows } = await pool.query(
-      `
-      INSERT INTO private_messages (from_user_id, to_user_id, message)
-      VALUES ($1, $2, $3)
-      RETURNING id, created_at
-      `,
-      [req.user.id, target.id, message]
-    );
-
-    const payload = {
-      id: Number(rows[0].id),
-      fromUserId: Number(req.user.id),
-      toUserId: Number(target.id),
-      fromUsername: req.user.username,
-      toUsername: target.username,
-      message,
-      createdAt: rows[0].created_at
-    };
-
-    sendPrivateMessageToUser(target.id, payload);
-
-    res.json({
-      ok: true,
-      item: payload
-    });
-  } catch (err) {
-    console.error("SEND PRIVATE MESSAGE ERROR:", err);
-    res.status(500).json({ error: "Failed to send message." });
-  }
-});
-
-app.post("/api/game/enter", requireAuth, async (req, res) => {
-  try {
-    const freshUser = await getUserById(req.user.id);
-    if (!freshUser) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const requestedStake = Number(req.body?.stake || 1);
-
-    if (!ALLOWED_STAKES.includes(requestedStake)) {
-      return res.status(400).json({ error: "Invalid amount selected." });
-    }
-
-    const existingSocketId = playerByUserId.get(req.user.id);
-    if (existingSocketId && players.has(existingSocketId)) {
-      return res.json({
-        ok: true,
-        alreadyInGame: true,
-        wallet: Number(freshUser.credits || 0)
-      });
-    }
-
-    if (Number(freshUser.credits || 0) < requestedStake) {
-      return res.status(400).json({
-        error: `You need at least $${requestedStake.toFixed(2)} to play with that amount.`
-      });
-    }
-
-    req.session.gameEntryReady = true;
-    req.session.gameEntryStake = requestedStake;
-
-    req.session.save((err) => {
-      if (err) {
-        console.error("SESSION SAVE ERROR:", err);
-        return res.status(500).json({ error: "Failed to save game session." });
-      }
-
-      res.json({
-        ok: true,
-        wallet: Number(freshUser.credits || 0),
-        cost: requestedStake
-      });
-    });
-  } catch (err) {
-    console.error("GAME ENTER ERROR:", err);
-    res.status(500).json({ error: "Failed to enter the game." });
-  }
-});
-
-app.get("/debug/players", (req, res) => {
-  res.json({
-    playerCount: players.size,
-    botCount: bots.length,
-    players: [...players.values()].map((p) => ({
-      id: p.id,
-      userId: p.userId,
-      name: p.name,
-      totalMass: Math.round(totalMass(p)),
-      cashValue: Number(p.cashValue || 0),
-      extracting: !!p.extracting,
-      extractTicks: Number(p.extractTicks || 0),
-      cells: p.cells.length
-    })),
-    bots: bots.map((b) => ({
-      id: b.id,
-      name: b.name,
-      totalMass: Math.round(totalMass(b)),
-      cashValue: Number(b.cashValue || 0),
-      cells: b.cells.length
-    })),
-    food: food.length,
-    chatMessages: chatMessages.length,
-    musicTracks: getMusicPlaylist().length
-  });
-});
-
-function resetWorldObjects() {
-  food.length = 0;
-  viruses.length = 0;
-
-  for (let i = 0; i < FOOD_COUNT; i++) {
-    food.push(createFood());
-  }
-
-  for (let i = 0; i < VIRUS_COUNT; i++) {
-    viruses.push(createVirus());
-  }
-}
-
-function respawnMissingBots() {
-  while (bots.length < BOT_COUNT) {
-    bots.push(createBot(bots.length));
-  }
-}
-
-function moveEntity(entity) {
-  if (entity.extracting) {
-    for (const cell of entity.cells) {
-      cell.vx *= 0.6;
-      cell.vy *= 0.6;
-      cell.x += cell.vx;
-      cell.y += cell.vy;
-
-      if (cell.mergeTimer > 0) cell.mergeTimer--;
-    }
-
-    for (const cell of entity.cells) {
-      const r = radiusFromMass(cell.mass);
-      const clamped = clampToWorldCircle(cell.x, cell.y, r);
-      cell.x = clamped.x;
-      cell.y = clamped.y;
-    }
-
-    return;
-  }
-
-  for (const cell of entity.cells) {
-    const speed = 2.9 / Math.pow(cell.mass, 0.16);
-    const len = Math.hypot(entity.mouse.x, entity.mouse.y) || 1;
-    const dirX = entity.mouse.x / len;
-    const dirY = entity.mouse.y / len;
-    const distFactor = Math.min(len / 220, 1);
-
-    cell.vx += dirX * speed * distFactor;
-    cell.vy += dirY * speed * distFactor;
-
-    cell.vx *= 0.89;
-    cell.vy *= 0.89;
-
-    cell.x += cell.vx;
-    cell.y += cell.vy;
-
-    if (cell.mergeTimer > 0) cell.mergeTimer--;
-  }
-
-  for (let i = 0; i < entity.cells.length; i++) {
-    for (let j = i + 1; j < entity.cells.length; j++) {
-      const a = entity.cells[i];
-      const b = entity.cells[j];
-
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const d = Math.hypot(dx, dy) || 1;
-
-      const ar = radiusFromMass(a.mass);
-      const br = radiusFromMass(b.mass);
-      const desiredSeparation = (ar + br) * TOUCH_SEPARATION_FACTOR;
-
-      if (d < desiredSeparation) {
-        const push = (desiredSeparation - d) * 0.5;
-        const nx = dx / d;
-        const ny = dy / d;
-
-        a.x -= nx * push;
-        a.y -= ny * push;
-        b.x += nx * push;
-        b.y += ny * push;
-
-        const relVx = b.vx - a.vx;
-        const relVy = b.vy - a.vy;
-        const inwardSpeed = relVx * nx + relVy * ny;
-
-        if (inwardSpeed < 0) {
-          const correction = inwardSpeed * 0.5;
-          a.vx += nx * correction;
-          a.vy += ny * correction;
-          b.vx -= nx * correction;
-          b.vy -= ny * correction;
-        }
-      }
-
-      if (d > desiredSeparation) {
-        const nx = dx / d;
-        const ny = dy / d;
-        const attraction =
-          a.mergeTimer > 0 || b.mergeTimer > 0
-            ? PREMERGE_ATTRACTION_FACTOR
-            : POSTMERGE_ATTRACTION_FACTOR;
-
-        a.vx += nx * attraction;
-        a.vy += ny * attraction;
-        b.vx -= nx * attraction;
-        b.vy -= ny * attraction;
-      }
-    }
-  }
-
-  for (const cell of entity.cells) {
-    const r = radiusFromMass(cell.mass);
-    const clamped = clampToWorldCircle(cell.x, cell.y, r);
-    cell.x = clamped.x;
-    cell.y = clamped.y;
-  }
-}
-
-function updateExtraction(entity) {
-  if (!isHuman(entity)) return;
-  if (!entity.cells.length) return;
-
-  if (entity.wantsExtract) {
-    entity.extracting = true;
-    entity.extractTicks += 1;
-    entity.mouse.x = 0;
-    entity.mouse.y = 0;
-    entity.wantsSplit = false;
-    entity.wantsEject = false;
-  } else {
-    entity.extracting = false;
-    entity.extractTicks = 0;
-  }
-}
-
-function splitEntity(entity) {
-  if (!entity.wantsSplit || entity.extracting) return;
-  entity.wantsSplit = false;
-
-  if (entity.cells.length >= MAX_CELLS) return;
-
-  const len = Math.hypot(entity.mouse.x, entity.mouse.y) || 1;
-  const dirX = entity.mouse.x / len;
-  const dirY = entity.mouse.y / len;
-  const newCells = [];
-
-  for (const cell of entity.cells) {
-    if (cell.mass < 36) continue;
-    if (entity.cells.length + newCells.length >= MAX_CELLS) break;
-
-    const childMass = cell.mass / 2;
-    cell.mass = childMass;
-
-    const r = radiusFromMass(childMass);
-    const spawnDistance = r * 3.4;
-
-    newCells.push({
-      x: cell.x + dirX * spawnDistance,
-      y: cell.y + dirY * spawnDistance,
-      mass: childMass,
-      vx: dirX * SPLIT_LAUNCH_SPEED,
-      vy: dirY * SPLIT_LAUNCH_SPEED,
-      mergeTimer: SPLIT_MERGE_DELAY_TICKS
-    });
-
-    cell.vx -= dirX * 4;
-    cell.vy -= dirY * 4;
-    cell.mergeTimer = SPLIT_MERGE_DELAY_TICKS;
-  }
-
-  entity.cells.push(...newCells);
-}
-
-function ejectMass(entity) {
-  if (!entity.wantsEject || entity.extracting) return;
-  entity.wantsEject = false;
-
-  const len = Math.hypot(entity.mouse.x, entity.mouse.y) || 1;
-  const dirX = entity.mouse.x / len;
-  const dirY = entity.mouse.y / len;
-
-  for (const cell of entity.cells) {
-    if (cell.mass <= EJECT_ORB_MASS + 10) continue;
-
-    cell.mass -= EJECT_ORB_MASS;
-
-    const rawX = cell.x + dirX * (radiusFromMass(cell.mass) + EJECT_LAUNCH_DISTANCE);
-    const rawY = cell.y + dirY * (radiusFromMass(cell.mass) + EJECT_LAUNCH_DISTANCE);
-    const clamped = clampToWorldCircle(rawX, rawY, EJECT_ORB_RADIUS);
-
-    food.push({
-      id: Math.random().toString(36).slice(2),
-      x: clamped.x,
-      y: clamped.y,
-      vx: dirX * EJECT_LAUNCH_SPEED,
-      vy: dirY * EJECT_LAUNCH_SPEED,
-      r: EJECT_ORB_RADIUS,
-      color: entity.color,
-      mass: EJECT_ORB_MASS
-    });
-  }
-}
-
-function moveEjectedFood() {
-  for (const f of food) {
-    if (typeof f.vx !== "number" || typeof f.vy !== "number") continue;
-
-    f.x += f.vx;
-    f.y += f.vy;
-
-    f.vx *= 0.92;
-    f.vy *= 0.92;
-
-    const clamped = clampToWorldCircle(f.x, f.y, f.r || 8);
-    f.x = clamped.x;
-    f.y = clamped.y;
-
-    if (Math.abs(f.vx) < 0.05) f.vx = 0;
-    if (Math.abs(f.vy) < 0.05) f.vy = 0;
-  }
-}
-
-function handleFoodEating(entity) {
-  let botRemainingFoodGrowth = Infinity;
-
-  if (isBot(entity)) {
-    const currentMass = totalMass(entity);
-    botRemainingFoodGrowth = Math.max(0, BOT_FOOD_CAP - currentMass);
-
-    if (botRemainingFoodGrowth <= 0) {
-      while (food.length < FOOD_COUNT) {
-        food.push(createFood());
-      }
-      return;
-    }
-  }
-
-  for (const cell of entity.cells) {
-    const r = radiusFromMass(cell.mass);
-
-    for (let i = food.length - 1; i >= 0; i--) {
-      if (isBot(entity) && botRemainingFoodGrowth <= 0) break;
-
-      const f = food[i];
-      const fr = typeof f.r === "number" ? f.r : 8;
-      const quickRange = r + fr + 24;
-
-      if (Math.abs(cell.x - f.x) > quickRange || Math.abs(cell.y - f.y) > quickRange) {
-        continue;
-      }
-
-      const eatDistSq = (r + fr) * (r + fr);
-
-      if (distanceSq(cell.x, cell.y, f.x, f.y) < eatDistSq) {
-        if (isBot(entity)) {
-          const gain = Math.min(f.mass, botRemainingFoodGrowth);
-          if (gain <= 0) continue;
-          cell.mass += gain;
-          botRemainingFoodGrowth -= gain;
-        } else {
-          cell.mass += f.mass;
-        }
-
-        food.splice(i, 1);
-      }
-    }
-  }
-
-  while (food.length < FOOD_COUNT) {
-    food.push(createFood());
-  }
-}
-
-function splitByVirus(entity, cellIndex, virusIndex) {
-  const cell = entity.cells[cellIndex];
-  if (!cell) return;
-  if (entity.cells.length >= MAX_CELLS) return;
-
-  const piecesWanted = Math.min(
-    MAX_CELLS - entity.cells.length + 1,
-    Math.max(2, Math.min(8, Math.floor(cell.mass / 18)))
-  );
-
-  if (piecesWanted < 2) return;
-
-  const partMass = cell.mass / piecesWanted;
-  cell.mass = partMass;
-  cell.mergeTimer = SPLIT_MERGE_DELAY_TICKS;
-
-  for (let i = 1; i < piecesWanted; i++) {
-    const ang = (Math.PI * 2 * i) / piecesWanted;
-    entity.cells.push({
-      x: cell.x + Math.cos(ang) * 35,
-      y: cell.y + Math.sin(ang) * 35,
-      mass: partMass,
-      vx: Math.cos(ang) * 22,
-      vy: Math.sin(ang) * 22,
-      mergeTimer: SPLIT_MERGE_DELAY_TICKS
-    });
-  }
-
-  viruses.splice(virusIndex, 1);
-  viruses.push(createVirus());
-}
-
-function handleVirusCollisions(entity) {
-  for (let v = viruses.length - 1; v >= 0; v--) {
-    const virus = viruses[v];
-
-    for (let c = entity.cells.length - 1; c >= 0; c--) {
-      const cell = entity.cells[c];
-      const r = radiusFromMass(cell.mass);
-
-      if (
-        cell.mass >= 36 &&
-        distance(cell.x, cell.y, virus.x, virus.y) < r - virus.r * 0.15
-      ) {
-        splitByVirus(entity, c, v);
-        break;
-      }
-    }
-  }
-}
-
-function handleSelfMerge(entity) {
-  if (entity.cells.length <= 1) return;
-
-  for (let i = 0; i < entity.cells.length; i++) {
-    for (let j = i + 1; j < entity.cells.length; j++) {
-      const a = entity.cells[i];
-      const b = entity.cells[j];
-
-      if (a.mergeTimer > 0 || b.mergeTimer > 0) continue;
-
-      const d = distance(a.x, a.y, b.x, b.y);
-      const ar = radiusFromMass(a.mass);
-      const br = radiusFromMass(b.mass);
-
-      if (d <= ar + br + 1) {
-        a.mass += b.mass;
-        a.vx = (a.vx + b.vx) * 0.5;
-        a.vy = (a.vy + b.vy) * 0.5;
-        entity.cells.splice(j, 1);
-        j--;
-      }
-    }
-  }
-}
-
-function botThink(bot) {
-  if (!bot.cells.length) return;
-
-  const center = entityCenter(bot);
-  const botMass = totalMass(bot);
-
-  let moveX = rand(-100, 100);
-  let moveY = rand(-100, 100);
-
-  for (const player of players.values()) {
-    if (!player.cells.length) continue;
-
-    const pc = entityCenter(player);
-    const d = distance(center.x, center.y, pc.x, pc.y);
-    const playerMass = totalMass(player);
-
-    if (playerMass > botMass * 1.08 && d < 1300) {
-      moveX += (center.x - pc.x) * 2.4;
-      moveY += (center.y - pc.y) * 2.4;
-    }
-  }
-
-  for (const other of bots) {
-    if (other.id === bot.id || !other.cells.length) continue;
-
-    const oc = entityCenter(other);
-    const d = distance(center.x, center.y, oc.x, oc.y) || 1;
-    const otherMass = totalMass(other);
-
-    if (otherMass > botMass * 1.08 && d < 1300) {
-      moveX += (center.x - oc.x) * 2.0;
-      moveY += (center.y - oc.y) * 2.0;
-    } else if (botMass > otherMass * 1.18 && d < 1800) {
-      moveX += (oc.x - center.x) * 1.4;
-      moveY += (oc.y - center.y) * 1.4;
-    }
-  }
-
-  if (botMass < BOT_FOOD_CAP) {
-    let nearestFood = null;
-    let nearestFoodDist = Infinity;
-
-    for (const f of food) {
-      const dx = f.x - center.x;
-      const dy = f.y - center.y;
-      const dsq = dx * dx + dy * dy;
-
-      if (dsq < nearestFoodDist && dsq < 320 * 320) {
-        nearestFoodDist = dsq;
-        nearestFood = f;
-      }
-    }
-
-    if (nearestFood) {
-      moveX += (nearestFood.x - center.x) * 0.55;
-      moveY += (nearestFood.y - center.y) * 0.55;
-    }
-  }
-
-  bot.mouse.x = Math.max(-1400, Math.min(1400, moveX));
-  bot.mouse.y = Math.max(-1400, Math.min(1400, moveY));
-}
-
-async function completeExtraction(player) {
-  const socket = io.sockets.sockets.get(player.id);
-  if (!player || !socket) return;
-
-  const totalValue = Number(player.cashValue || 0);
-  const payout = Number((totalValue * EXTRACTION_PAYOUT_RATE).toFixed(2));
-
-  try {
-    if (payout > 0) {
-      const wallet = await addCreditsTx(
-        player.userId,
-        payout,
-        "extraction_payout",
-        `Extracted from match (${Math.round(EXTRACTION_PAYOUT_RATE * 100)}% payout)`
-      );
-
-      if (socket.request?.session?.user) {
-        socket.request.session.user.credits = wallet;
-      }
-    }
-
-    players.delete(player.id);
-    if (player.userId) {
-      playerByUserId.delete(player.userId);
-      socketsByUserId.delete(player.userId);
-    }
-
-    if (socket.request?.session) {
-      socket.request.session.gameEntryReady = false;
-      socket.request.session.gameEntryStake = null;
-      socket.request.session.save(() => {});
-    }
-
-    socket.emit("extracted", {
-      payout,
-      kept: totalValue,
-      message: `You extracted ${payout.toFixed(2)} back to your wallet.`
-    });
-
-    addChatMessage("SERVER", `${player.name} extracted from the match`);
-  } catch (err) {
-    console.error("EXTRACTION ERROR:", err);
-    socket.emit("extractFailed", { error: "Failed to extract." });
-    player.extracting = false;
-    player.extractTicks = 0;
-    player.wantsExtract = false;
-  }
-}
-
-function eliminateHuman(player, eaterName) {
-  const socket = io.sockets.sockets.get(player.id);
-
-  if (socket) {
-    socket.emit("dead", {
-      by: eaterName || null,
-      message: eaterName ? `You were eaten by ${eaterName}.` : "You died."
-    });
-  }
-
-  player.alive = false;
-  players.delete(player.id);
-
-  if (player.userId) {
-    playerByUserId.delete(player.userId);
-    socketsByUserId.delete(player.userId);
-  }
-
-  const req = socket?.request;
-  if (req?.session) {
-    req.session.gameEntryReady = false;
-    req.session.gameEntryStake = null;
-    req.session.save(() => {});
-  }
-}
-
-function respawnBotAtIndex(index) {
-  bots[index] = createBot(index);
-}
-
-function eliminateBot(botIndex) {
-  respawnBotAtIndex(botIndex);
-}
-
-function handleEntityVsEntity() {
-  const livingHumans = [...players.values()];
-  const livingBots = bots.filter((b) => b.cells.length > 0);
-  const all = [...livingHumans, ...livingBots];
-
-  for (let i = 0; i < all.length; i++) {
-    for (let j = i + 1; j < all.length; j++) {
-      const a = all[i];
-      const b = all[j];
-
-      if (!a.cells.length || !b.cells.length) continue;
-
-      for (let ai = a.cells.length - 1; ai >= 0; ai--) {
-        const ac = a.cells[ai];
-        if (!ac) continue;
-
-        for (let bi = b.cells.length - 1; bi >= 0; bi--) {
-          const bc = b.cells[bi];
-          if (!bc) continue;
-
-          const ar = radiusFromMass(ac.mass);
-          const br = radiusFromMass(bc.mass);
-          const d = distance(ac.x, ac.y, bc.x, bc.y);
-
-          if (ac.mass > bc.mass * 1.12 && d < ar - br * 0.3) {
-            ac.mass += bc.mass;
-            b.cells.splice(bi, 1);
-
-            if (b.cells.length === 0) {
-              a.cashValue = Number(a.cashValue || 0) + Number(b.cashValue || 0);
-              b.cashValue = 0;
-
-              if (isHuman(b)) eliminateHuman(b, a.name);
-              else if (isBot(b)) eliminateBot(b.botIndex);
-            }
-          } else if (bc.mass > ac.mass * 1.12 && d < br - ar * 0.3) {
-            bc.mass += ac.mass;
-            a.cells.splice(ai, 1);
-
-            if (a.cells.length === 0) {
-              b.cashValue = Number(b.cashValue || 0) + Number(a.cashValue || 0);
-              a.cashValue = 0;
-
-              if (isHuman(a)) eliminateHuman(a, b.name);
-              else if (isBot(a)) eliminateBot(a.botIndex);
-            }
-
-            break;
-          }
-        }
-      }
-    }
-  }
-}
-
-function buildLeaderboard() {
-  const all = [
-    ...[...players.values()].filter((p) => p.cells.length > 0),
-    ...bots.filter((b) => b.cells.length > 0)
-  ];
-
-  return all
-    .map((entity) => ({
-      name: entity.name,
-      mass: Math.round(totalMass(entity)),
-      value: Number(entity.cashValue || 0)
-    }))
-    .sort((a, b) => b.mass - a.mass)
-    .slice(0, 10);
-}
-
-async function buildSnapshotFor(targetPlayer) {
-  const center = entityCenter(targetPlayer);
-  const total = totalMass(targetPlayer);
-
-  const biggestCellMass = targetPlayer.cells.length
-    ? Math.max(...targetPlayer.cells.map((c) => c.mass))
-    : total;
-
-  const biggestRadius = radiusFromMass(biggestCellMass || START_MASS);
-  const visibleRadius = Math.max(2100, biggestRadius * 6 + SNAPSHOT_PADDING);
-
-  const visibleFood = [];
-  for (const f of food) {
-    if (
-      Math.abs(f.x - center.x) <= visibleRadius &&
-      Math.abs(f.y - center.y) <= visibleRadius
-    ) {
-      visibleFood.push(f);
-    }
-  }
-
-  const visibleViruses = [];
-  for (const v of viruses) {
-    if (
-      Math.abs(v.x - center.x) <= visibleRadius &&
-      Math.abs(v.y - center.y) <= visibleRadius
-    ) {
-      visibleViruses.push(v);
-    }
-  }
-
-  const visiblePlayers = [];
-  const all = [...players.values(), ...bots];
-
-  for (const entity of all) {
-    if (!entity.cells.length) continue;
-
-    const pCenter = entityCenter(entity);
-
-    if (
-      entity.id !== targetPlayer.id &&
-      Math.abs(pCenter.x - center.x) > visibleRadius &&
-      Math.abs(pCenter.y - center.y) > visibleRadius
-    ) {
+function drawViruses() {
+  for (const virus of state.viruses) {
+    const s = worldToScreen(virus.x, virus.y);
+    const rr = virus.r * state.zoom;
+
+    if (s.x < -rr * 1.5 || s.x > W + rr * 1.5 || s.y < -rr * 1.5 || s.y > H + rr * 1.5) {
       continue;
     }
 
-    visiblePlayers.push({
-      id: entity.id,
-      name: entity.name,
-      color: entity.color,
-      totalMass: Math.round(totalMass(entity)),
-      cashValue: Number(entity.cashValue || 0),
-      extracting: !!entity.extracting,
-      extractTicks: Number(entity.extractTicks || 0),
-      isBot: isBot(entity),
-      cells: entity.cells.map((c) => ({
-        x: c.x,
-        y: c.y,
-        mass: c.mass
-      }))
-    });
+    const spikes = 18;
+
+    ctx.beginPath();
+    for (let i = 0; i <= spikes; i++) {
+      const a = (i / spikes) * Math.PI * 2;
+      const rad = rr * (i % 2 === 0 ? 1.14 : 0.88);
+      const px = s.x + Math.cos(a) * rad;
+      const py = s.y + Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "#33d65c";
+    ctx.fill();
+    ctx.strokeStyle = "#239842";
+    ctx.lineWidth = Math.max(1, 2 * state.zoom);
+    ctx.stroke();
+  }
+}
+
+function drawPlayers() {
+  const sorted = [...state.players].sort((a, b) => {
+    const am = a.cells.reduce((s, c) => s + c.mass, 0);
+    const bm = b.cells.reduce((s, c) => s + c.mass, 0);
+    return am - bm;
+  });
+
+  for (const player of sorted) {
+    const totalMass = player.cells.reduce((s, c) => s + c.mass, 0) || 1;
+    const totalValue = Number(player.cashValue || 0);
+
+    for (const cell of player.cells) {
+      const s = worldToScreen(cell.x, cell.y);
+      const r = radiusFromMass(cell.mass) * state.zoom;
+
+      if (s.x < -r * 2 || s.x > W + r * 2 || s.y < -r * 2 || s.y > H + r * 2) continue;
+
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = player.color;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.15)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      if (r > 18) {
+        const cellValue = totalValue * (cell.mass / totalMass);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `${Math.max(12, r * 0.28)}px Arial`;
+        ctx.fillText(player.name, s.x, s.y - 8);
+
+        ctx.fillStyle = "#39ff76";
+        ctx.font = `${Math.max(10, r * 0.19)}px Arial`;
+        ctx.fillText(formatBallMoney(cellValue), s.x, s.y + 14);
+      }
+    }
+  }
+}
+
+function drawMinimap() {
+  const mapW = 170;
+  const mapH = 170;
+  const x = W - mapW - 16;
+  const y = H - mapH - 16;
+
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.fillRect(x, y, mapW, mapH);
+  ctx.strokeStyle = "#d0d0d0";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, mapW, mapH);
+
+  for (const virus of state.viruses) {
+    const mx = x + ((virus.x + state.worldSize / 2) / state.worldSize) * mapW;
+    const my = y + ((virus.y + state.worldSize / 2) / state.worldSize) * mapH;
+    ctx.fillStyle = "#33d65c";
+    ctx.fillRect(mx - 1, my - 1, 3, 3);
   }
 
-  visiblePlayers.sort((a, b) => a.totalMass - b.totalMass);
+  for (const p of state.players) {
+    if (!p.cells.length) continue;
 
-  const freshUser = await getUserById(targetPlayer.userId);
+    let total = 0;
+    let sx = 0;
+    let sy = 0;
 
+    for (const c of p.cells) {
+      total += c.mass;
+      sx += c.x * c.mass;
+      sy += c.y * c.mass;
+    }
+
+    const centerX = sx / total;
+    const centerY = sy / total;
+
+    const mx = x + ((centerX + state.worldSize / 2) / state.worldSize) * mapW;
+    const my = y + ((centerY + state.worldSize / 2) / state.worldSize) * mapH;
+
+    ctx.fillStyle = p.id === state.myId ? "#33c3ff" : (p.isBot ? "#55aa55" : "#888");
+    ctx.beginPath();
+    ctx.arc(mx, my, p.id === state.myId ? 4 : 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function updateHud() {
+  if (massValue) {
+    massValue.textContent = Math.floor(getMyTotalMass());
+  }
+
+  if (!gameLeaderboardEntries) return;
+
+  if (!state.leaderboard.length) {
+    gameLeaderboardEntries.innerHTML = `<div class="emptyCardText">No players yet.</div>`;
+    return;
+  }
+
+  gameLeaderboardEntries.innerHTML = state.leaderboard
+    .map(
+      (entry, i) =>
+        `<div>${i + 1}. ${escapeHtml(entry.name)} - ${entry.mass} - <span style="color:#39ff76;font-weight:700">${formatBallMoney(entry.value || 0)}</span></div>`
+    )
+    .join("");
+}
+
+function render() {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+  drawGrid();
+  drawFood();
+  drawViruses();
+  drawPlayers();
+  drawExtractionIndicator();
+  drawMinimap();
+  updateHud();
+}
+
+function cloneStateForSnapshot(serverState) {
   return {
-    worldSize: WORLD_SIZE,
-    food: visibleFood,
-    viruses: visibleViruses,
-    players: visiblePlayers,
-    leaderboard: buildLeaderboard(),
-    wallet: freshUser?.credits ?? 0,
-    debugPlayerCount: players.size,
-    debugBotCount: bots.length
+    worldSize: serverState.worldSize,
+    food: (serverState.food || []).map((f) => ({ ...f })),
+    viruses: (serverState.viruses || []).map((v) => ({ ...v })),
+    leaderboard: (serverState.leaderboard || []).map((e) => ({ ...e })),
+    wallet: Number(serverState.wallet || 0),
+    players: (serverState.players || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      isBot: !!p.isBot,
+      cashValue: Number(p.cashValue || 0),
+      extracting: !!p.extracting,
+      extractTicks: Number(p.extractTicks || 0),
+      totalMass: p.totalMass,
+      cells: (p.cells || []).map((c) => ({ ...c }))
+    }))
   };
 }
 
-io.on("connection", (socket) => {
-  console.log("socket connected:", socket.id);
+function interpolatePlayers(older, newer, alpha) {
+  const oldMap = new Map((older.players || []).map((p) => [p.id, p]));
+  const newMap = new Map((newer.players || []).map((p) => [p.id, p]));
+  const out = [];
 
-  socket.on("join", async (payload) => {
-    try {
-      const req = socket.request;
-      const sessionUser = req.session?.user;
+  for (const [id, newPlayer] of newMap) {
+    const oldPlayer = oldMap.get(id) || newPlayer;
 
-      if (!sessionUser?.id) {
-        socket.emit("joinError", { error: "You must be logged in." });
-        return;
-      }
-
-      const freshUser = await getUserById(sessionUser.id);
-      if (!freshUser) {
-        socket.emit("joinError", { error: "User not found." });
-        return;
-      }
-
-      const existingSocketId = playerByUserId.get(freshUser.id);
-      if (
-        existingSocketId &&
-        existingSocketId !== socket.id &&
-        players.has(existingSocketId)
-      ) {
-        socket.emit("joinError", { error: "You are already in a match." });
-        return;
-      }
-
-      if (!req.session.gameEntryReady) {
-        socket.emit("joinError", { error: "Enter the game from the menu first." });
-        return;
-      }
-
-      const stake = Number(req.session.gameEntryStake || 1);
-
-      if (!ALLOWED_STAKES.includes(stake)) {
-        socket.emit("joinError", { error: "Invalid selected amount." });
-        return;
-      }
-
-      if (Number(freshUser.credits || 0) < stake) {
-        socket.emit("joinError", { error: "Not enough balance to play." });
-        return;
-      }
-
-      const wallet = await spendCreditsTx(
-        freshUser.id,
-        stake,
-        "game_entry",
-        `Entered a match with $${stake.toFixed(2)}`
-      );
-
-      req.session.user = {
-        id: freshUser.id,
-        username: freshUser.username,
-        credits: wallet
-      };
-      req.session.gameEntryReady = false;
-      req.session.gameEntryStake = null;
-
-      req.session.save(async (saveErr) => {
-        if (saveErr) {
-          console.error("SESSION SAVE ERROR AFTER JOIN:", saveErr);
-
-          try {
-            const refundedWallet = await addCreditsTx(
-              freshUser.id,
-              stake,
-              "game_entry_refund",
-              "Refund after failed join save"
-            );
-
-            req.session.user = {
-              id: freshUser.id,
-              username: freshUser.username,
-              credits: refundedWallet
-            };
-
-            req.session.save(() => {});
-          } catch (refundErr) {
-            console.error("REFUND ERROR:", refundErr);
-          }
-
-          socket.emit("joinError", { error: "Failed to save session." });
-          return;
-        }
-
-        const player = createHumanPlayer(
-          socket.id,
-          {
-            id: freshUser.id,
-            username: freshUser.username
-          },
-          payload
-        );
-
-        player.cashValue = stake;
-
-        players.set(socket.id, player);
-        playerByUserId.set(freshUser.id, socket.id);
-        socketsByUserId.set(freshUser.id, socket.id);
-
-        socket.emit("chatHistory", chatMessages);
-        socket.emit("joined", {
-          ok: true,
-          wallet
-        });
-
-        addChatMessage("SERVER", `${player.name} joined the game`);
-      });
-    } catch (err) {
-      console.error("JOIN ERROR:", err);
-
-      if (err.code === "INSUFFICIENT_CREDITS") {
-        socket.emit("joinError", { error: "Not enough balance to play." });
-        return;
-      }
-
-      socket.emit("joinError", { error: "Failed to join the match." });
-    }
-  });
-
-  socket.on("chat", (text) => {
-    const player = players.get(socket.id);
-    if (!player) return;
-    addChatMessage(player.name, text);
-  });
-
-  socket.on("input", (input) => {
-    const player = players.get(socket.id);
-    if (!player) return;
-
-    if (typeof input?.mouseX === "number") player.mouse.x = input.mouseX;
-    if (typeof input?.mouseY === "number") player.mouse.y = input.mouseY;
-    if (input?.split) player.wantsSplit = true;
-    if (input?.eject) player.wantsEject = true;
-    if (typeof input?.extracting === "boolean") player.wantsExtract = input.extracting;
-  });
-
-  socket.on("disconnect", () => {
-    const player = players.get(socket.id);
-
-    if (player) {
-      addChatMessage("SERVER", `${player.name} left the game`);
-      players.delete(socket.id);
-
-      if (player.userId) {
-        playerByUserId.delete(player.userId);
-        socketsByUserId.delete(player.userId);
-      }
-
-      if (socket.request?.session) {
-        socket.request.session.gameEntryReady = false;
-        socket.request.session.gameEntryStake = null;
-        socket.request.session.save(() => {});
-      }
-    }
-
-    console.log("socket disconnected:", socket.id);
-  });
-});
-
-async function tick() {
-  respawnMissingBots();
-
-  for (const bot of bots) {
-    botThink(bot);
-  }
-
-  moveEjectedFood();
-
-  for (const entity of [...players.values(), ...bots]) {
-    if (!entity.cells.length) continue;
-
-    updateExtraction(entity);
-    moveEntity(entity);
-    splitEntity(entity);
-    ejectMass(entity);
-    handleFoodEating(entity);
-    handleVirusCollisions(entity);
-    handleSelfMerge(entity);
-  }
-
-  handleEntityVsEntity();
-
-  const finishedExtractions = [...players.values()].filter(
-    (p) => p.extracting && p.extractTicks >= EXTRACTION_HOLD_TICKS
-  );
-
-  for (const player of finishedExtractions) {
-    await completeExtraction(player);
-  }
-
-  while (food.length < FOOD_COUNT) food.push(createFood());
-  while (viruses.length < VIRUS_COUNT) viruses.push(createVirus());
-  respawnMissingBots();
-
-  for (const [id, player] of players.entries()) {
-    const sock = io.sockets.sockets.get(id);
-    if (!sock) continue;
-
-    try {
-      const snapshot = await buildSnapshotFor(player);
-      sock.volatile.emit("state", snapshot);
-    } catch (err) {
-      console.error("SNAPSHOT ERROR:", err);
-    }
-  }
-}
-
-resetWorldObjects();
-respawnMissingBots();
-
-async function start() {
-  await initDb();
-
-  setInterval(() => {
-    tick().catch((err) => {
-      console.error("GAME LOOP ERROR:", err);
+    out.push({
+      ...newPlayer,
+      cells: newPlayer.cells.map((newCell, i) => {
+        const oldCell = oldPlayer.cells[i] || newCell;
+        return {
+          ...newCell,
+          x: lerp(oldCell.x, newCell.x, alpha),
+          y: lerp(oldCell.y, newCell.y, alpha)
+        };
+      })
     });
-  }, 1000 / TICK_RATE);
+  }
 
-  server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-    console.log(`Music folder: ${AUDIO_DIR}`);
+  return out;
+}
+
+function getInterpolatedState() {
+  if (snapshots.length === 0) return null;
+  if (snapshots.length === 1) return snapshots[0].state;
+
+  const renderTime = Date.now() - INTERPOLATION_DELAY;
+
+  let older = snapshots[0];
+  let newer = snapshots[snapshots.length - 1];
+
+  for (let i = 0; i < snapshots.length - 1; i++) {
+    if (snapshots[i].time <= renderTime && snapshots[i + 1].time >= renderTime) {
+      older = snapshots[i];
+      newer = snapshots[i + 1];
+      break;
+    }
+  }
+
+  if (renderTime >= snapshots[snapshots.length - 1].time) {
+    return snapshots[snapshots.length - 1].state;
+  }
+
+  const span = newer.time - older.time || 1;
+  const alpha = Math.max(0, Math.min(1, (renderTime - older.time) / span));
+
+  return {
+    worldSize: newer.state.worldSize,
+    food: newer.state.food,
+    viruses: newer.state.viruses,
+    leaderboard: newer.state.leaderboard,
+    wallet: newer.state.wallet,
+    players: interpolatePlayers(older.state, newer.state, alpha)
+  };
+}
+
+window.addEventListener("mousemove", (e) => {
+  state.mouseX = e.clientX - W / 2;
+  state.mouseY = e.clientY - H / 2;
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "\\") {
+    e.preventDefault();
+    if (inMatch) {
+      setChatOpen(!chatOpen);
+    }
+    return;
+  }
+
+  if (e.key === "q" || e.key === "Q") {
+    state.extracting = true;
+  }
+
+  if (chatOpen) return;
+  if (!inMatch) return;
+
+  if (e.code === "Space") {
+    e.preventDefault();
+    state.splitQueued = true;
+  }
+
+  if (e.key === "w" || e.key === "W") {
+    state.ejectQueued = true;
+  }
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === "q" || e.key === "Q") {
+    state.extracting = false;
+  }
+});
+
+async function joinGame() {
+  if (isJoinInFlight || inMatch) return;
+
+  if (!currentUser) {
+    setAuthStatus("You must log in first.", true);
+    showLandingWithAuth();
+    return;
+  }
+
+  isJoinInFlight = true;
+  setPlayButtonState(true);
+  setMenuStatus("");
+  setWalletStatus("");
+
+  try {
+    const data = await api("/api/game/enter", { stake: selectedStake });
+
+    if (data.error) {
+      setMenuStatus(data.error, true);
+      return;
+    }
+
+    if (typeof data.wallet !== "undefined") {
+      updateWalletUi(data.wallet);
+      currentUser.credits = Number(data.wallet || 0);
+    }
+
+    await reconnectSocketAfterAuth();
+
+    socket.emit("join", {
+      name: (nameInput?.value || "").trim() || "Player",
+      color: normalizeBallColor(colorInput ? colorInput.value : DEFAULT_BALL_COLOR)
+    });
+  } catch (err) {
+    console.error("JOIN GAME ERROR:", err);
+    setMenuStatus("Failed to start match.", true);
+  } finally {
+    isJoinInFlight = false;
+    if (!inMatch) setPlayButtonState(false);
+  }
+}
+
+async function handleAddBalance() {
+  if (!currentUser) return;
+
+  const amount = Number(walletAmountInput?.value || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setWalletStatus("Enter a valid amount.", true);
+    return;
+  }
+
+  addBalanceBtn.disabled = true;
+  withdrawBtn.disabled = true;
+  setWalletStatus("Adding balance...");
+
+  try {
+    const data = await api("/api/credits/add", { amount });
+    if (data.error) {
+      setWalletStatus(data.error, true);
+      return;
+    }
+
+    updateWalletUi(data.wallet);
+    currentUser.credits = Number(data.wallet || 0);
+    if (walletAmountInput) walletAmountInput.value = "";
+    setWalletStatus("Balance added successfully.");
+    await refreshMenuWalletLeaderboard();
+  } catch (err) {
+    console.error("ADD BALANCE ERROR:", err);
+    setWalletStatus("Failed to add balance.", true);
+  } finally {
+    addBalanceBtn.disabled = false;
+    withdrawBtn.disabled = false;
+  }
+}
+
+async function handleWithdraw() {
+  if (!currentUser) return;
+
+  const amount = Number(walletAmountInput?.value || 0);
+  const address = String(withdrawAddressInput?.value || "").trim();
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setWalletStatus("Enter a valid withdrawal amount.", true);
+    return;
+  }
+
+  if (!address) {
+    setWalletStatus("Enter your Solana wallet address.", true);
+    return;
+  }
+
+  addBalanceBtn.disabled = true;
+  withdrawBtn.disabled = true;
+  setWalletStatus("Creating withdrawal request...");
+
+  try {
+    const data = await api("/api/credits/withdraw", { amount, address });
+    if (data.error) {
+      setWalletStatus(data.error, true);
+      return;
+    }
+
+    updateWalletUi(data.wallet);
+    currentUser.credits = Number(data.wallet || 0);
+    if (walletAmountInput) walletAmountInput.value = "";
+    setWalletStatus("Withdrawal request submitted.");
+    await refreshMenuWalletLeaderboard();
+  } catch (err) {
+    console.error("WITHDRAW ERROR:", err);
+    setWalletStatus("Failed to withdraw.", true);
+  } finally {
+    addBalanceBtn.disabled = false;
+    withdrawBtn.disabled = false;
+  }
+}
+
+playBtn?.addEventListener("click", joinGame);
+
+nameInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    joinGame();
+  }
+});
+
+startMenuBtn?.addEventListener("click", async () => {
+  showLandingWithAuth();
+  await tryStartMenuMusic();
+});
+
+stakeButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    stakeButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedStake = Number(btn.dataset.stake || 1);
+  });
+});
+
+document.querySelectorAll(".colorSwatch").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setSelectedBallColor(btn.getAttribute("data-color") || DEFAULT_BALL_COLOR);
+  });
+});
+
+musicCloseBtn?.addEventListener("click", closeMusicPlayer);
+
+toggleFriendSearchBtn?.addEventListener("click", () => {
+  friendSearchPanel?.classList.toggle("hidden");
+  if (!friendSearchPanel?.classList.contains("hidden")) {
+    friendSearchInput?.focus();
+  }
+});
+
+friendSearchInput?.addEventListener("input", () => {
+  clearTimeout(friendSearchTimer);
+  friendSearchTimer = setTimeout(() => {
+    searchFriends(friendSearchInput.value);
+  }, 250);
+});
+
+sendPrivateChatBtn?.addEventListener("click", sendPrivateMessage);
+
+privateChatInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    sendPrivateMessage();
+  }
+});
+
+closePrivateChatBtn?.addEventListener("click", closePrivateChat);
+
+musicPlayPauseBtn?.addEventListener("click", toggleMusicPlayback);
+musicNextBtn?.addEventListener("click", playNextTrack);
+musicPrevBtn?.addEventListener("click", playPrevTrack);
+
+musicVolumeRange?.addEventListener("input", () => {
+  state.musicMuted = false;
+  state.musicVolume = Number(musicVolumeRange.value || 0.4);
+  applyMusicSettings();
+  if (menuMusic && menuMusic.paused && !inMatch) {
+    updatePlayPauseButton();
+  }
+});
+
+rouletteOpenBtn?.addEventListener("click", openRouletteModal);
+closeRouletteBtn?.addEventListener("click", closeRouletteModal);
+rouletteSpinBtn?.addEventListener("click", handleRouletteSpin);
+
+rouletteAmountButtons?.querySelectorAll("[data-roulette-amount]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (state.rouletteSpinning) return;
+    state.rouletteBetAmount = Number(btn.dataset.rouletteAmount || 1);
+    renderRouletteUi();
+  });
+});
+
+rouletteBetRedBtn?.addEventListener("click", () => {
+  if (state.rouletteSpinning) return;
+  setRouletteBet("color", "red");
+});
+
+rouletteBetBlackBtn?.addEventListener("click", () => {
+  if (state.rouletteSpinning) return;
+  setRouletteBet("color", "black");
+});
+
+rouletteNumberGrid?.addEventListener("click", (e) => {
+  const target = e.target.closest("[data-roulette-number]");
+  if (!target || state.rouletteSpinning) return;
+  setRouletteBet("number", Number(target.dataset.rouletteNumber));
+});
+
+menuMusic?.addEventListener("ended", () => {
+  playNextTrack();
+});
+
+menuMusic?.addEventListener("play", updatePlayPauseButton);
+menuMusic?.addEventListener("pause", updatePlayPauseButton);
+
+renderRouletteNumberButtons();
+drawRouletteWheel(0);
+setSelectedBallColor(DEFAULT_BALL_COLOR);
+updateMenuMusicVisibility();
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (state.rouletteOpen && !state.rouletteSpinning) closeRouletteModal();
+    if (state.bjOpen && !state.bjPlaying) closeBlackjackModal();
+  }
+});
+
+if (chatInput) {
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const text = chatInput.value.trim();
+      if (text) {
+        socket.emit("chat", text);
+        chatInput.value = "";
+      }
+    }
+
+    if (e.key === "Escape" || e.key === "\\") {
+      e.preventDefault();
+      setChatOpen(false);
+    }
+
+    e.stopPropagation();
   });
 }
 
-start().catch((err) => {
-  console.error("STARTUP ERROR:", err);
-  process.exit(1);
+registerBtn?.addEventListener("click", async () => {
+  try {
+    const username = authUsername.value.trim();
+    const password = authPassword.value;
+
+    const data = await api("/api/register", { username, password });
+    if (data.error) {
+      setAuthStatus(data.error, true);
+      return;
+    }
+
+    updateAuthUi(data.user);
+    setAuthStatus(`Logged in as ${data.user?.username || username}`);
+
+    try {
+      await reconnectSocketAfterAuth();
+    } catch (err) {
+      console.error("POST-REGISTER SOCKET ERROR:", err);
+      setMenuStatus("Account created, but live connection failed. Reload the page if needed.", true);
+    }
+
+    try {
+      await refreshMenuData();
+    } catch (err) {
+      console.error("POST-REGISTER MENU REFRESH ERROR:", err);
+    }
+
+    setMenuStatus("Welcome bonus received: $5.00");
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
+    setAuthStatus("Failed to register.", true);
+  }
 });
+
+loginBtn?.addEventListener("click", async () => {
+  try {
+    const username = authUsername.value.trim();
+    const password = authPassword.value;
+
+    const data = await api("/api/login", { username, password });
+    if (data.error) {
+      setAuthStatus(data.error, true);
+      return;
+    }
+
+    updateAuthUi(data.user);
+    setAuthStatus(`Logged in as ${data.user?.username || username}`);
+
+    try {
+      await reconnectSocketAfterAuth();
+    } catch (err) {
+      console.error("POST-LOGIN SOCKET ERROR:", err);
+      setMenuStatus("Logged in, but live connection failed. Reload the page if needed.", true);
+    }
+
+    try {
+      await refreshMenuData();
+    } catch (err) {
+      console.error("POST-LOGIN MENU REFRESH ERROR:", err);
+    }
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    setAuthStatus("Failed to log in.", true);
+  }
+});
+
+logoutBtn?.addEventListener("click", async () => {
+  try {
+    await api("/api/logout", {});
+    updateAuthUi(null);
+  } catch (err) {
+    console.error("LOGOUT ERROR:", err);
+    setAuthStatus("Failed to log out.", true);
+  }
+});
+
+addBalanceBtn?.addEventListener("click", handleAddBalance);
+withdrawBtn?.addEventListener("click", handleWithdraw);
+
+socket.on("connect", () => {
+  state.connected = true;
+  state.myId = socket.id;
+});
+
+socket.on("disconnect", () => {
+  state.connected = false;
+  inMatch = false;
+  setPlayButtonState(false);
+  resetGameVisualState();
+
+  if (isIntentionalReconnect) return;
+
+  if (currentUser) {
+    showMenu();
+    setMenuStatus("Connection lost. Back in menu.", true);
+  } else {
+    showLandingWithAuth();
+  }
+});
+
+socket.on("joined", (data) => {
+  inMatch = true;
+  hideMenusForGame();
+  setPlayButtonState(false);
+  setMenuStatus("");
+  setWalletStatus("");
+
+  if (gameLeaderboard) gameLeaderboard.classList.remove("hidden");
+
+  if (typeof data?.wallet !== "undefined") {
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
+  }
+});
+
+socket.on("joinError", (data) => {
+  inMatch = false;
+  resetGameVisualState();
+  showMenu();
+  setPlayButtonState(false);
+  setMenuStatus(data?.error || "Failed to join match.", true);
+});
+
+socket.on("dead", async (data) => {
+  inMatch = false;
+  resetGameVisualState();
+  showMenu();
+  setPlayButtonState(false);
+  setMenuStatus(data?.message || "You died and returned to the menu.", true);
+  await refreshMenuData();
+});
+
+socket.on("chatHistory", (history) => {
+  stateChatMessages.length = 0;
+  for (const msg of history || []) {
+    stateChatMessages.push(msg);
+  }
+  renderChat();
+});
+
+socket.on("chat", (msg) => {
+  pushChatMessage(msg);
+});
+
+socket.on("state", (serverState) => {
+  snapshots.push({
+    time: Date.now(),
+    state: cloneStateForSnapshot(serverState)
+  });
+
+  while (snapshots.length > 10) {
+    snapshots.shift();
+  }
+
+  if (typeof serverState.wallet !== "undefined") {
+    updateWalletUi(serverState.wallet);
+    if (currentUser) currentUser.credits = Number(serverState.wallet || 0);
+  }
+});
+
+socket.on("extracted", async (data) => {
+  inMatch = false;
+  resetGameVisualState();
+  showMenu();
+  setPlayButtonState(false);
+  setMenuStatus(data?.message || "You extracted from the match.");
+  await refreshMenuData();
+});
+
+socket.on("extractFailed", (data) => {
+  state.extracting = false;
+  setMenuStatus(data?.error || "Extraction failed.", true);
+});
+
+socket.on("friendNotification", async (payload) => {
+  if (!payload || !payload.type) return;
+
+  if (payload.type === "friend_request") {
+    showToast(`${payload.fromUsername} sent you a friend request`);
+    await refreshFriendRequests();
+  }
+
+  if (payload.type === "friend_accept") {
+    showToast(`${payload.fromUsername} accepted your friend request`);
+    await refreshFriendsList();
+  }
+});
+
+socket.on("privateMessage", (msg) => {
+  const otherName =
+    msg.fromUsername === currentUser?.username ? msg.toUsername : msg.fromUsername;
+
+  if (!state.privateChats[otherName]) {
+    state.privateChats[otherName] = [];
+  }
+
+  state.privateChats[otherName].push(msg);
+
+  if (state.activePrivateChat === otherName) {
+    renderPrivateChat();
+  } else {
+    showToast(`New message from ${msg.fromUsername}`);
+  }
+});
+
+setInterval(() => {
+  if (!state.connected || !inMatch) return;
+
+  socket.emit("input", {
+    mouseX: state.mouseX,
+    mouseY: state.mouseY,
+    split: state.splitQueued,
+    eject: state.ejectQueued,
+    extracting: state.extracting
+  });
+
+  state.splitQueued = false;
+  state.ejectQueued = false;
+}, 1000 / 60);
+
+function loop() {
+  const interpolated = getInterpolatedState();
+
+  if (interpolated) {
+    state.worldSize = interpolated.worldSize;
+    state.food = interpolated.food;
+    state.viruses = interpolated.viruses;
+    state.players = interpolated.players;
+    state.leaderboard = interpolated.leaderboard;
+
+    if (typeof interpolated.wallet !== "undefined") {
+      updateWalletUi(interpolated.wallet);
+    }
+  }
+
+  updateCamera();
+  render();
+  requestAnimationFrame(loop);
+}
+
+spawnMoneySigns(moneyBg, 28);
+spawnBackgroundBalls(menuBallsBg, 24);
+updateColorPreview();
+loadMusicSettings();
+loadMusicPlaylist();
+checkSession();
+loop();
+setPlayButtonState(false);
