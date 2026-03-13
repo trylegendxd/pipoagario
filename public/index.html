@@ -64,14 +64,14 @@
         <div class="menuCard casinoCard">
           <div class="cardHeader">
             <span>🎰 Casino</span>
-            <span class="liveBadge casinoSoonBadge">Soon</span>
+            <span class="liveBadge casinoSoonBadge">Live</span>
           </div>
 
           <div class="casinoBody">
-            <div class="casinoIntro">Future features for quick bets and side games.</div>
+            <div class="casinoIntro">Side games for quick bets while you wait for the arena.</div>
             <div class="casinoButtons">
-              <button type="button" class="casinoBtn" disabled>Blackjack</button>
-              <button type="button" class="casinoBtn" disabled>Roulette</button>
+              <button id="blackjackOpenBtn" type="button" class="casinoBtn" disabled>Blackjack</button>
+              <button id="rouletteOpenBtn" type="button" class="casinoBtn rouletteLaunchBtn">Roulette</button>
             </div>
           </div>
         </div>
@@ -257,6 +257,69 @@
     </div>
 
     <audio id="menuMusic" preload="auto"></audio>
+
+    <div class="casinoOverlay hidden" id="rouletteOverlay">
+      <div class="rouletteModal">
+        <div class="rouletteModalHeader">
+          <div>
+            <div class="rouletteModalTitle">Roulette</div>
+            <div class="rouletteModalSub">Pick a number or choose red / black, then spin.</div>
+          </div>
+          <button id="closeRouletteBtn" type="button" class="miniCardBtn">Close</button>
+        </div>
+
+        <div class="rouletteModalBody">
+          <div class="rouletteSidebar">
+            <div class="rouletteSideCard">
+              <div class="rouletteSideLabel">Current balance</div>
+              <div class="rouletteBalanceValue" id="rouletteBalanceValue">$0.00</div>
+            </div>
+
+            <div class="rouletteSideCard">
+              <div class="rouletteSideLabel">Bet amount</div>
+              <div class="rouletteAmountButtons" id="rouletteAmountButtons">
+                <button type="button" class="rouletteAmountBtn active" data-roulette-amount="1">$1</button>
+                <button type="button" class="rouletteAmountBtn" data-roulette-amount="2">$2</button>
+                <button type="button" class="rouletteAmountBtn" data-roulette-amount="3">$3</button>
+                <button type="button" class="rouletteAmountBtn" data-roulette-amount="4">$4</button>
+                <button type="button" class="rouletteAmountBtn" data-roulette-amount="5">$5</button>
+              </div>
+            </div>
+
+            <div class="rouletteSideCard">
+              <div class="rouletteSideLabel">Color bet</div>
+              <div class="rouletteColorButtons">
+                <button id="rouletteBetRedBtn" type="button" class="rouletteBetBtn redBet">Red 2x</button>
+                <button id="rouletteBetBlackBtn" type="button" class="rouletteBetBtn blackBet">Black 2x</button>
+              </div>
+            </div>
+
+            <div class="rouletteSideCard">
+              <div class="rouletteSideLabel">Number bet</div>
+              <div class="rouletteSelectedBet" id="rouletteSelectedBet">Beting on Red · $1</div>
+              <div class="rouletteNumberGrid" id="rouletteNumberGrid"></div>
+            </div>
+
+            <button id="rouletteSpinBtn" type="button" class="rouletteSpinBtn">SPIN</button>
+            <div class="rouletteStatus" id="rouletteStatus">Choose a bet and spin the wheel.</div>
+          </div>
+
+          <div class="rouletteWheelPanel">
+            <div class="rouletteWheelStage">
+              <div class="rouletteArrow" aria-hidden="true"></div>
+              <div class="rouletteWheelFrame">
+                <canvas id="rouletteWheelCanvas" width="700" height="700"></canvas>
+              </div>
+            </div>
+            <div class="rouletteResultCard">
+              <div class="rouletteResultLabel">Latest result</div>
+              <div class="rouletteResultValue" id="rouletteResultValue">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
 
     <div class="toastContainer" id="toastContainer"></div>
   </div>
