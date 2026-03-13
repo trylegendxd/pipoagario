@@ -176,6 +176,10 @@ function formatBallMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
 
 function getRouletteColor(number) {
   if (number === 0) return "green";
@@ -1119,13 +1123,8 @@ function setChatOpen(open) {
 
   if (chatOpen && chatInput) {
     setTimeout(() => chatInput.focus(), 0);
-  } else renderRouletteNumberButtons();
-drawRouletteWheel(0);
-setSelectedBallColor(DEFAULT_BALL_COLOR);
-updateMenuMusicVisibility();
-
-if (chatInput) {
-    chatInput.blur();
+  } else {
+    if (chatInput) chatInput.blur();
   }
 }
 
