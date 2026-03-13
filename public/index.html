@@ -70,7 +70,7 @@
           <div class="casinoBody">
             <div class="casinoIntro">Side games for quick bets while you wait for the arena.</div>
             <div class="casinoButtons">
-              <button id="blackjackOpenBtn" type="button" class="casinoBtn" disabled>Blackjack</button>
+              <button id="blackjackOpenBtn" type="button" class="casinoBtn blackjackLaunchBtn">Blackjack</button>
               <button id="rouletteOpenBtn" type="button" class="casinoBtn rouletteLaunchBtn">Roulette</button>
             </div>
           </div>
@@ -320,6 +320,66 @@
       </div>
     </div>
 
+
+    <div class="casinoOverlay hidden" id="blackjackOverlay">
+      <div class="blackjackModal">
+        <div class="blackjackModalHeader">
+          <div>
+            <div class="blackjackModalTitle">♠ Blackjack</div>
+            <div class="blackjackModalSub">Get closer to 21 than the dealer without going over. Blackjack pays 3:2.</div>
+          </div>
+          <button id="closeBlackjackBtn" type="button" class="miniCardBtn">Close</button>
+        </div>
+
+        <div class="blackjackModalBody">
+          <div class="blackjackSidebar">
+            <div class="bjSideCard">
+              <div class="bjSideLabel">Balance</div>
+              <div class="bjBalanceValue" id="bjBalanceValue">$0.00</div>
+            </div>
+
+            <div class="bjSideCard">
+              <div class="bjSideLabel">Bet amount</div>
+              <div class="bjAmountButtons" id="bjAmountButtons">
+                <button type="button" class="bjAmountBtn active" data-bj-amount="1">$1</button>
+                <button type="button" class="bjAmountBtn" data-bj-amount="2">$2</button>
+                <button type="button" class="bjAmountBtn" data-bj-amount="3">$3</button>
+                <button type="button" class="bjAmountBtn" data-bj-amount="4">$4</button>
+                <button type="button" class="bjAmountBtn" data-bj-amount="5">$5</button>
+              </div>
+            </div>
+
+            <button id="bjDealBtn" type="button" class="bjDealBtn">🃏 DEAL</button>
+
+            <div class="bjActionButtons hidden" id="bjActionButtons">
+              <button id="bjHitBtn" type="button" class="bjActionBtn bjHit">HIT</button>
+              <button id="bjStandBtn" type="button" class="bjActionBtn bjStand">STAND</button>
+              <button id="bjDoubleBtn" type="button" class="bjActionBtn bjDouble">DOUBLE DOWN</button>
+            </div>
+
+            <div class="bjStatus" id="bjStatus">Choose your bet and deal.</div>
+          </div>
+
+          <div class="blackjackTable">
+            <canvas id="bjDealerCanvas" width="160" height="220"></canvas>
+
+            <div class="bjDealerArea">
+              <div class="bjAreaLabel">Dealer <span id="bjDealerScore" class="bjScore"></span></div>
+              <div class="bjCards" id="bjDealerCards"></div>
+            </div>
+
+            <div class="bjResultBanner hidden" id="bjResultBanner"></div>
+
+            <div class="bjPlayerArea">
+              <div class="bjAreaLabel">You <span id="bjPlayerScore" class="bjScore"></span></div>
+              <div class="bjCards" id="bjPlayerCards"></div>
+            </div>
+
+            <div class="bjBetDisplay" id="bjBetDisplay"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="toastContainer" id="toastContainer"></div>
   </div>
