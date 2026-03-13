@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PIPO.IO</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div class="hud">
+    <div class="massBox">
+      <div class="massLabel">Mass</div>
+      <div class="massValue" id="massValue">0</div>
+    </div>
+
+    <div class="leaderboard gameLeaderboard" id="gameLeaderboard">
+      <div class="leaderboardTitle">Leaderboard</div>
+      <div class="leaderboardEntries" id="gameLeaderboardEntries"></div>
+    </div>
+  </div>
+
+  <div class="chatBox" id="chatBox">
+    <div class="chatMessages" id="chatMessages"></div>
+    <input
+      type="text"
+      id="chatInput"
+      class="chatInput"
+      placeholder="Type message and press Enter..."
+      maxlength="160"
+    />
+  </div>
+
+  <div class="landingScreen" id="landingScreen">
+    <div class="moneyBg" id="moneyBg"></div>
+
+    <div class="landingPanel">
+      <h1>PIPO.IO</h1>
+      <p>Grow bigger. Dominate the map.</p>
+      <button id="startMenuBtn">PLAY</button>
+    </div>
+
+    <div class="authPanel hidden" id="authPanel">
+      <h2>Account</h2>
+      <input id="authUsername" type="text" placeholder="Username" maxlength="20" />
+      <input id="authPassword" type="password" placeholder="Password" maxlength="64" />
+
+      <div class="authButtons">
+        <button id="registerBtn" type="button">Register</button>
+        <button id="loginBtn" type="button">Login</button>
+        <button id="logoutBtn" type="button" class="hidden">Logout</button>
+      </div>
+
+      <div id="authStatus"></div>
+    </div>
+  </div>
+
+  <div class="menu hidden" id="menu">
+    <div class="ballsBg" id="menuBallsBg"></div>
+
+    <div class="menuShell">
+      <div class="sideColumn">
+        <div class="menuCard leaderboardCard">
+          <div class="cardHeader">
+            <span>🏆 Richest Players</span>
+            <span class="liveBadge">Top 10</span>
+          </div>
+          <div class="leaderboardEntries" id="menuLeaderboardEntries"></div>
+        </div>
+
+        <div class="menuCard friendsCard">
+          <div class="cardHeader">
+            <span>👥 Friends</span>
+            <button id="toggleFriendSearchBtn" type="button" class="miniCardBtn">Add</button>
+          </div>
+
+          <div class="friendsSection">
+            <div class="friendsSubTitle">Your friends</div>
+            <div class="friendsList" id="friendsList">
+              <div class="emptyCardText">No friends yet.</div>
+            </div>
+          </div>
+
+          <div class="friendSearchPanel hidden" id="friendSearchPanel">
+            <input
+              id="friendSearchInput"
+              type="text"
+              placeholder="Search account name..."
+              maxlength="20"
+            />
+            <div class="friendSearchResults" id="friendSearchResults"></div>
+          </div>
+
+          <div class="friendsSection">
+            <div class="friendsSubTitle">Requests</div>
+            <div class="friendRequestsList" id="friendRequestsList">
+              <div class="emptyCardText">No pending requests.</div>
+            </div>
+          </div>
+
+          <div class="friendsStatus" id="friendsStatus"></div>
+        </div>
+
+        <div class="menuCard privateChatCard hidden" id="privateChatCard">
+          <div class="cardHeader">
+            <span id="privateChatTitle">Private Chat</span>
+            <button id="closePrivateChatBtn" type="button" class="miniCardBtn">Close</button>
+          </div>
+
+          <div class="privateChatMessages" id="privateChatMessages"></div>
+
+          <div class="privateChatInputRow">
+            <input
+              id="privateChatInput"
+              type="text"
+              maxlength="500"
+              placeholder="Type a private message..."
+            />
+            <button id="sendPrivateChatBtn" type="button">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="centerColumn">
+        <div class="menuCard mainPlayCard">
+          <h1>PIPO.IO</h1>
+          <p>Choose your name and amount to enter the arena.</p>
+
+          <input
+            id="nameInput"
+            type="text"
+            maxlength="16"
+            placeholder="Nickname"
+            value="Player"
+          />
+
+          <div class="stakeSection">
+            <div class="stakeTitle">Choose amount</div>
+            <div class="stakeButtons">
+              <button class="stakeBtn active" data-stake="1" type="button">$1</button>
+              <button class="stakeBtn" data-stake="5" type="button">$5</button>
+              <button class="stakeBtn" data-stake="10" type="button">$10</button>
+              <button class="stakeBtn" data-stake="20" type="button">$20</button>
+            </div>
+          </div>
+
+          <button id="playBtn" class="mainJoinBtn">JOIN GAME</button>
+
+          <div id="menuStatus" class="menuStatus"></div>
+
+          <div class="smallInfo">
+            Move mouse to move · Space to split · W to eject · Q hold to extract · \ to chat
+          </div>
+        </div>
+      </div>
+
+      <div class="sideColumn">
+        <div class="menuCard walletCard" id="walletCard">
+          <div class="cardHeader">
+            <span>💼 Wallet</span>
+          </div>
+
+          <div class="walletBalanceBig" id="walletValue">$0.00</div>
+
+          <input
+            id="walletAmountInput"
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="Amount in €"
+          />
+
+          <input
+            id="withdrawAddressInput"
+            type="text"
+            maxlength="80"
+            placeholder="Solana wallet address"
+          />
+
+          <div class="walletButtons">
+            <button id="addBalanceBtn" type="button">Add Funds</button>
+            <button id="withdrawBtn" type="button" class="secondaryButton">Cash Out</button>
+          </div>
+
+          <div class="walletHint">1 EUR = 1 wallet credit</div>
+          <div class="walletStatus" id="walletStatus"></div>
+        </div>
+
+        <div class="menuCard customizeCard">
+          <div class="cardHeader">
+            <span>🎨 Customize</span>
+          </div>
+
+          <div class="customizeBody">
+            <div class="colorRow">
+              <label for="colorInput">Ball color</label>
+              <input id="colorInput" type="color" value="#33c3ff" />
+            </div>
+
+            <div class="colorPreviewWrap">
+              <div class="colorPreviewLabel">Preview</div>
+              <div class="colorPreviewBall" id="colorPreviewBall"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="menuMusicPlayer" id="menuMusicPlayer">
+      <div class="musicTopRow">
+        <div class="musicNowLabel">Now Playing</div>
+        <div class="musicSongName" id="musicSongName">No song loaded</div>
+      </div>
+
+      <div class="musicControlsRow">
+        <button id="musicPrevBtn" type="button" class="musicControlBtn">⏮</button>
+        <button id="musicPlayPauseBtn" type="button" class="musicControlBtn primary">▶</button>
+        <button id="musicNextBtn" type="button" class="musicControlBtn">⏭</button>
+      </div>
+
+      <div class="musicVolumeRow">
+        <span class="musicVolumeLabel">Volume</span>
+        <input id="musicVolumeRange" type="range" min="0" max="1" step="0.01" value="0.4" />
+      </div>
+    </div>
+
+    <audio id="menuMusic" preload="auto"></audio>
+
+    <div class="toastContainer" id="toastContainer"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/game.js"></script>
+</body>
+</html>

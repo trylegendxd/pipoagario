@@ -1,0 +1,20 @@
+{
+  "name": "pipo-io",
+  "version": "1.0.0",
+  "description": "PIPO.IO multiplayer game server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^10.0.0",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "pg": "^8.13.1",
+    "socket.io": "^4.8.1"
+  }
+}

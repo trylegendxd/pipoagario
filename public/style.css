@@ -1,0 +1,844 @@
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: Ubuntu, Arial, sans-serif;
+  background: #ffffff;
+}
+
+body {
+  color: #24364d;
+}
+
+.hidden {
+  display: none !important;
+}
+
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background: #ffffff;
+  cursor: crosshair;
+}
+
+.menu {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, #f8fbff 0%, #eef4fb 55%, #e6eef8 100%);
+}
+
+.menuShell {
+  position: relative;
+  z-index: 2;
+  width: min(1440px, calc(100vw - 40px));
+  display: grid;
+  grid-template-columns: 1fr 420px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.sideColumn,
+.centerColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.menuCard {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d9e4f2;
+  border-radius: 22px;
+  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 12px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #24364d;
+}
+
+.liveBadge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #e6fff1;
+  color: #0a9c4a;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid #bcebcf;
+}
+
+.miniCardBtn {
+  padding: 7px 12px;
+  border: 1px solid #cfdbff;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #3459ff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mainPlayCard {
+  padding: 22px;
+  text-align: center;
+}
+
+.mainPlayCard h1,
+.landingPanel h1 {
+  margin: 0 0 10px;
+  font-size: 58px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 2px;
+  background: linear-gradient(180deg, #4db2ff, #0f69da);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.mainPlayCard p,
+.landingPanel p {
+  margin: 0 0 16px;
+  font-size: 15px;
+  color: #607289;
+}
+
+.mainPlayCard input,
+.walletCard input,
+.authPanel input,
+.friendSearchPanel input,
+.privateChatInputRow input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid #d6e1ef;
+  background: #ffffff;
+  font-size: 15px;
+  outline: none;
+  margin-top: 12px;
+  font-family: inherit;
+}
+
+.mainPlayCard input:focus,
+.walletCard input:focus,
+.authPanel input:focus,
+.friendSearchPanel input:focus,
+.privateChatInputRow input:focus {
+  border-color: #8fb8ea;
+  box-shadow: 0 0 0 4px rgba(77, 178, 255, 0.12);
+}
+
+.stakeSection {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.stakeTitle {
+  margin-bottom: 10px;
+  color: #465a72;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.stakeButtons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.stakeBtn {
+  padding: 13px 10px;
+  border-radius: 14px;
+  border: 2px solid #d8e4f1;
+  background: #ffffff;
+  color: #1f3550;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.stakeBtn:hover {
+  transform: translateY(-1px);
+  border-color: #b8cde6;
+}
+
+.stakeBtn.active {
+  background: linear-gradient(180deg, #ffd85c, #ffbe1f);
+  border-color: #efb100;
+  color: #1f1600;
+  box-shadow: 0 8px 18px rgba(255, 191, 29, 0.26);
+}
+
+.mainJoinBtn,
+#addBalanceBtn,
+#withdrawBtn,
+#startMenuBtn,
+#registerBtn,
+#loginBtn,
+#logoutBtn,
+#sendPrivateChatBtn {
+  width: 100%;
+  padding: 15px 16px;
+  border-radius: 16px;
+  border: 0;
+  font-size: 17px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.mainJoinBtn,
+#startMenuBtn,
+#registerBtn,
+#loginBtn,
+#logoutBtn {
+  background: linear-gradient(180deg, #ffd85c, #ffb400);
+  color: #101010;
+  box-shadow: 0 10px 24px rgba(255, 183, 0, 0.24);
+}
+
+.mainJoinBtn {
+  margin-top: 18px;
+}
+
+#addBalanceBtn {
+  background: #e8fff1;
+  color: #06984a;
+  border: 1px solid #bcebcf;
+}
+
+#withdrawBtn {
+  background: #eef3ff;
+  color: #3459ff;
+  border: 1px solid #cfdbff;
+}
+
+.walletCard {
+  padding: 0 20px 20px;
+}
+
+.walletBalanceBig {
+  padding: 8px 0 4px;
+  text-align: center;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 900;
+  color: #17a34a;
+}
+
+.walletButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.walletHint,
+.walletStatus,
+.menuStatus,
+.emptyCardText,
+.smallInfo,
+.friendsStatus {
+  margin-top: 12px;
+  text-align: center;
+  color: #687b92;
+  font-size: 13px;
+}
+
+.leaderboardCard,
+.friendsCard,
+.customizeCard,
+.privateChatCard {
+  overflow: hidden;
+}
+
+.leaderboardCard {
+  padding-bottom: 16px;
+}
+
+.leaderboardEntries {
+  padding: 0 20px 18px;
+  color: #24364d;
+  font-size: 15px;
+}
+
+.leaderboardEntries div {
+  margin: 8px 0;
+}
+
+.friendsCard {
+  padding-bottom: 16px;
+}
+
+.friendsSection {
+  padding: 0 20px;
+  margin-bottom: 14px;
+}
+
+.friendsSubTitle {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #5f7289;
+  text-transform: uppercase;
+}
+
+.friendsList,
+.friendRequestsList,
+.friendSearchResults {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friendSearchPanel {
+  padding: 0 20px 14px;
+}
+
+.friendRow,
+.friendRequestRow,
+.friendSearchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dce6f2;
+  border-radius: 14px;
+  background: #f9fbff;
+}
+
+.friendName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #24364d;
+}
+
+.friendActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.friendBtnAccept,
+.friendBtnAdd,
+.friendBtnDeny,
+.friendBtnRemove,
+.friendBtnChat {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.friendBtnAdd,
+.friendBtnAccept,
+.friendBtnChat {
+  background: #e8fff1;
+  color: #07954b;
+}
+
+.friendBtnDeny,
+.friendBtnRemove {
+  background: #fff0f0;
+  color: #cc2c2c;
+}
+
+.customizeBody {
+  padding: 0 20px 20px;
+}
+
+.colorRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid #d6e1ef;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.colorRow label {
+  color: #33455d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#colorInput {
+  width: 56px;
+  height: 38px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  margin-top: 0;
+  padding: 0;
+}
+
+.colorPreviewWrap {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f7fbff;
+  border: 1px solid #dce7f3;
+}
+
+.colorPreviewLabel {
+  font-size: 14px;
+  font-weight: 800;
+  color: #4c6179;
+}
+
+.colorPreviewBall {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #33c3ff;
+  border: 3px solid rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 3px 8px rgba(255, 255, 255, 0.28);
+}
+
+.privateChatCard {
+  padding-bottom: 16px;
+}
+
+.privateChatMessages {
+  height: 240px;
+  overflow-y: auto;
+  padding: 0 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.privateMsg {
+  max-width: 82%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.privateMsg.me {
+  align-self: flex-end;
+  background: #e8fff1;
+  color: #0a7f43;
+}
+
+.privateMsg.them {
+  align-self: flex-start;
+  background: #eef3ff;
+  color: #2742a5;
+}
+
+.privateChatInputRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+#sendPrivateChatBtn {
+  width: auto;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #e8fff1;
+  color: #07954b;
+  font-weight: 800;
+}
+
+.ballsBg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bgBall {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.22;
+  animation: floatBall linear infinite;
+  filter: blur(0.2px);
+}
+
+@keyframes floatBall {
+  from {
+    transform: translateY(110vh) translateX(0px);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.22;
+  }
+  85% {
+    opacity: 0.22;
+  }
+  to {
+    transform: translateY(-20vh) translateX(40px);
+    opacity: 0;
+  }
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.massBox {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  min-width: 88px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #d5dfea;
+  border-radius: 16px;
+  padding: 10px 12px 8px;
+  box-shadow: 0 8px 24px rgba(59, 92, 141, 0.12);
+}
+
+.massLabel {
+  font-size: 11px;
+  color: #7a8da3;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  font-weight: 700;
+}
+
+.massValue {
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 900;
+  color: #31455f;
+}
+
+.gameLeaderboard {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 250px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #d3dbe6;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(59, 92, 141, 0.12);
+}
+
+.leaderboardTitle {
+  background: #f4f8fd;
+  border-bottom: 1px solid #dde6f0;
+  padding: 10px 12px;
+  font-size: 24px;
+  font-weight: 900;
+  color: #4b5f78;
+  text-align: center;
+}
+
+.chatBox {
+  position: fixed;
+  left: 16px;
+  bottom: 90px;
+  width: 320px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #d5dfea;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(59, 92, 141, 0.14);
+  overflow: hidden;
+  display: none;
+  z-index: 30;
+}
+
+.chatMessages {
+  height: 180px;
+  overflow-y: auto;
+  padding: 10px;
+  font-size: 13px;
+  color: #333;
+  background: rgba(250, 250, 250, 0.96);
+}
+
+.chatMessage {
+  margin-bottom: 6px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.chatName {
+  font-weight: 700;
+  color: #2f7edb;
+  margin-right: 6px;
+}
+
+.chatInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-top: 1px solid #dde6f0;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+  font-family: inherit;
+}
+
+.landingScreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #f7fbff, #e8f1fb);
+  overflow: hidden;
+  z-index: 30;
+}
+
+.landingPanel {
+  position: relative;
+  z-index: 2;
+  width: 420px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #d9e4f2;
+  border-radius: 22px;
+  padding: 28px;
+  text-align: center;
+  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.12);
+}
+
+.moneyBg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.moneySign {
+  position: absolute;
+  color: rgba(60, 125, 255, 0.12);
+  font-weight: 900;
+  font-family: Arial, sans-serif;
+  animation: floatMoney linear infinite;
+  user-select: none;
+}
+
+@keyframes floatMoney {
+  from {
+    transform: translateY(110vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-20vh) rotate(20deg);
+    opacity: 0;
+  }
+}
+
+.authPanel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 340px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #d9e4f2;
+  border-radius: 22px;
+  padding: 22px;
+  z-index: 60;
+  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.14);
+  text-align: center;
+}
+
+.authPanel h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+  color: #24364d;
+}
+
+.authButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+#logoutBtn {
+  grid-column: 1 / -1;
+}
+
+#authStatus {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #556980;
+  min-height: 18px;
+}
+
+.menuMusicPlayer {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 50;
+  width: 290px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #d8e4f1;
+  border-radius: 20px;
+  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.14);
+  padding: 14px 14px 12px;
+  backdrop-filter: blur(8px);
+}
+
+.musicTopRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.musicNowLabel {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6a7d94;
+}
+
+.musicSongName {
+  font-size: 14px;
+  font-weight: 800;
+  color: #24364d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.musicControlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.musicControlBtn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d7e3ef;
+  border-radius: 50%;
+  background: #f7fbff;
+  color: #2a4261;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.musicControlBtn:hover {
+  transform: translateY(-1px);
+  background: #eef5fd;
+}
+
+.musicControlBtn.primary {
+  width: 54px;
+  height: 54px;
+  background: linear-gradient(180deg, #4db2ff, #1e7ff0);
+  color: #ffffff;
+  border-color: #1e7ff0;
+  box-shadow: 0 10px 22px rgba(30, 127, 240, 0.22);
+}
+
+.musicVolumeRow {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.musicVolumeLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: #607289;
+}
+
+.musicVolumeRow input[type="range"] {
+  width: 100%;
+}
+
+.toastContainer {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toastItem {
+  min-width: 240px;
+  max-width: 380px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(28, 39, 53, 0.92);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 1180px) {
+  .menuShell {
+    grid-template-columns: 1fr;
+    width: calc(100vw - 20px);
+    padding-bottom: 110px;
+  }
+
+  .menuMusicPlayer {
+    width: calc(100vw - 36px);
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 700px) {
+  .landingPanel,
+  .authPanel,
+  .mainPlayCard {
+    width: auto;
+  }
+
+  .stakeButtons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .gameLeaderboard {
+    width: 210px;
+  }
+
+  .privateChatInputRow {
+    grid-template-columns: 1fr;
+  }
+}
