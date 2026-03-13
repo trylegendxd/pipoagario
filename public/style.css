@@ -359,6 +359,45 @@ canvas {
   color: #cc2c2c;
 }
 
+.casinoCard {
+  overflow: hidden;
+}
+
+.casinoBody {
+  padding: 0 20px 18px;
+}
+
+.casinoIntro {
+  color: #5f7289;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.casinoButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.casinoBtn {
+  border: 1px solid #d7e3ef;
+  border-radius: 14px;
+  padding: 14px 10px;
+  background: linear-gradient(180deg, #f8fbff, #eef5fd);
+  color: #7f90a4;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.casinoSoonBadge {
+  background: #fff7de;
+  color: #b68300;
+  border-color: #f1df9f;
+}
+
 .customizeBody {
   padding: 0 20px 20px;
 }
@@ -382,13 +421,55 @@ canvas {
 }
 
 #colorInput {
-  width: 56px;
-  height: 38px;
-  border: 0;
-  background: transparent;
+  display: none;
+}
+
+.colorPickerRow {
+  align-items: flex-start;
+}
+
+.colorSwatches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: min(220px, 100%);
+}
+
+.colorSwatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  background: var(--swatch-color);
+  box-shadow:
+    inset 0 5px 10px rgba(255, 255, 255, 0.3),
+    0 4px 10px rgba(36, 54, 77, 0.12);
   cursor: pointer;
-  margin-top: 0;
-  padding: 0;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.colorSwatch:hover {
+  transform: translateY(-1px) scale(1.03);
+}
+
+.colorSwatch.active {
+  border-color: #1f73e8;
+  box-shadow:
+    inset 0 5px 10px rgba(255, 255, 255, 0.32),
+    0 0 0 3px rgba(31, 115, 232, 0.14),
+    0 6px 16px rgba(36, 54, 77, 0.18);
+}
+
+.colorPreviewText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.colorPreviewName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #607289;
 }
 
 .colorPreviewWrap {
@@ -701,20 +782,44 @@ canvas {
   left: 18px;
   bottom: 18px;
   z-index: 50;
-  width: 290px;
+  width: 240px;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #d8e4f1;
-  border-radius: 20px;
-  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.14);
-  padding: 14px 14px 12px;
+  border-radius: 18px;
+  box-shadow: 0 14px 30px rgba(59, 92, 141, 0.14);
+  padding: 10px 10px 10px;
   backdrop-filter: blur(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.menuMusicPlayer.chatHidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
 }
 
 .musicTopRow {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
+  gap: 3px;
+  margin-bottom: 8px;
+  padding-right: 24px;
+}
+
+.musicCloseBtn {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d7e3ef;
+  border-radius: 999px;
+  background: #f7fbff;
+  color: #607289;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .musicNowLabel {
@@ -726,7 +831,7 @@ canvas {
 }
 
 .musicSongName {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   color: #24364d;
   white-space: nowrap;
@@ -738,13 +843,13 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .musicControlBtn {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: 1px solid #d7e3ef;
   border-radius: 50%;
   background: #f7fbff;
@@ -761,8 +866,8 @@ canvas {
 }
 
 .musicControlBtn.primary {
-  width: 54px;
-  height: 54px;
+  width: 46px;
+  height: 46px;
   background: linear-gradient(180deg, #4db2ff, #1e7ff0);
   color: #ffffff;
   border-color: #1e7ff0;
@@ -771,8 +876,8 @@ canvas {
 
 .musicVolumeRow {
   display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 10px;
+  grid-template-columns: 48px 1fr;
+  gap: 8px;
   align-items: center;
 }
 
