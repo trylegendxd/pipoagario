@@ -73,6 +73,7 @@ const ALLOWED_PLAYER_COLORS = new Set([
 ]);
 
 const ROULETTE_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
+const BLACKJACK_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
 const ROULETTE_RED_NUMBERS = new Set([
   1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
 ]);
@@ -80,6 +81,7 @@ const ROULETTE_RED_NUMBERS = new Set([
 const players = new Map();
 const playerByUserId = new Map();
 const socketsByUserId = new Map();
+const blackjackGames = new Map();
 
 const food = [];
 const viruses = [];
@@ -537,6 +539,77 @@ function getRandomRouletteNumber() {
   return Math.floor(Math.random() * 37);
 }
 
+// ─── BLACKJACK HELPERS ────────────────────────────────────────────────────────
+
+function bjCreateDeck() {
+  const suits = ["\u2660", "\u2665", "\u2666", "\u2663"];
+  const values = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  const deck = [];
+  for (const suit of suits) for (const value of values) deck.push({ suit, value });
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function bjCardNum(card) {
+  if (!card || card.hidden) return 0;
+  if (["J","Q","K"].includes(card.value)) return 10;
+  if (card.value === "A") return 11;
+  return Number(card.value);
+}
+
+function bjHandValue(hand) {
+  let total = 0, aces = 0;
+  for (const card of hand) {
+    if (card.hidden) continue;
+    total += bjCardNum(card);
+    if (card.value === "A") aces++;
+  }
+  while (total > 21 && aces-- > 0) total -= 10;
+  return total;
+}
+
+function bjIsBlackjack(hand) {
+  return hand.length === 2 && bjHandValue(hand) === 21;
+}
+
+async function bjResolve(game) {
+  while (bjHandValue(game.dealerHand) < 17) {
+    game.dealerHand.push(game.deck.pop());
+  }
+  const pv = bjHandValue(game.playerHand);
+  const dv = bjHandValue(game.dealerHand);
+  let payout = 0, status;
+  if (dv > 21)      { status = "dealer_bust"; payout = game.bet * 2; }
+  else if (pv > dv) { status = "player_win";  payout = game.bet * 2; }
+  else if (dv > pv) { status = "dealer_win";  payout = 0; }
+  else              { status = "push";         payout = game.bet; }
+  game.status = status;
+  game.payout = payout;
+  if (payout > 0) {
+    const txType = status === "push" ? "blackjack_push" : "blackjack_win";
+    game.wallet = await addCreditsTx(
+      game.userId, payout, txType,
+      `Blackjack ${status}: $${payout.toFixed(2)}`
+    );
+  }
+}
+
+function bjPublicState(game, hideDealer) {
+  return {
+    playerHand: game.playerHand,
+    dealerHand: hideDealer ? [game.dealerHand[0], { hidden: true }] : game.dealerHand,
+    playerValue: bjHandValue(game.playerHand),
+    dealerValue: hideDealer ? bjCardNum(game.dealerHand[0]) : bjHandValue(game.dealerHand),
+    status: game.status,
+    bet: game.bet,
+    payout: game.payout || 0,
+    wallet: game.wallet
+  };
+}
+
 async function requireAuth(req, res, next) {
   try {
     const user = await getSessionUser(req);
@@ -799,6 +872,121 @@ app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
 
     console.error("ROULETTE SPIN ERROR:", err);
     res.status(500).json({ error: "Failed to spin roulette." });
+  }
+});
+
+// ─── BLACKJACK ROUTES ─────────────────────────────────────────────────────────
+
+app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
+  try {
+    const amount = Number(req.body?.amount);
+    if (!BLACKJACK_ALLOWED_BET_AMOUNTS.has(amount)) {
+      return res.status(400).json({ error: "Blackjack bets must be between $1 and $5." });
+    }
+    const existing = blackjackGames.get(req.user.id);
+    if (existing && existing.status === "playing") {
+      return res.status(400).json({ error: "Finish your current hand first." });
+    }
+    const wallet = await spendCreditsTx(
+      req.user.id, amount, "blackjack_bet", `Blackjack bet $${amount}`
+    );
+    const deck = bjCreateDeck();
+    const playerHand = [deck.pop(), deck.pop()];
+    const dealerHand = [deck.pop(), deck.pop()];
+    const game = {
+      userId: req.user.id, bet: amount, deck,
+      playerHand, dealerHand, status: "playing", wallet, payout: 0
+    };
+
+    if (bjIsBlackjack(playerHand)) {
+      if (bjIsBlackjack(dealerHand)) {
+        game.wallet = await addCreditsTx(req.user.id, amount, "blackjack_push", "Blackjack push");
+        game.status = "push"; game.payout = amount;
+      } else {
+        const payout = Math.round(amount * 2.5);
+        game.wallet = await addCreditsTx(req.user.id, payout, "blackjack_win", `Blackjack! $${payout}`);
+        game.status = "blackjack"; game.payout = payout;
+      }
+    }
+
+    blackjackGames.set(req.user.id, game);
+    req.session.user.credits = game.wallet;
+    res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
+  } catch (err) {
+    if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance." });
+    console.error("BLACKJACK START ERROR:", err);
+    res.status(500).json({ error: "Failed to start game." });
+  }
+});
+
+app.post("/api/casino/blackjack/hit", requireAuth, async (req, res) => {
+  try {
+    const game = blackjackGames.get(req.user.id);
+    if (!game || game.status !== "playing") {
+      return res.status(400).json({ error: "No active game." });
+    }
+    game.playerHand.push(game.deck.pop());
+    const pv = bjHandValue(game.playerHand);
+    if (pv > 21) {
+      game.status = "player_bust"; game.payout = 0;
+    } else if (pv === 21) {
+      await bjResolve(game);
+    }
+    req.session.user.credits = game.wallet;
+    res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
+  } catch (err) {
+    console.error("BLACKJACK HIT ERROR:", err);
+    res.status(500).json({ error: "Failed to process hit." });
+  }
+});
+
+app.post("/api/casino/blackjack/stand", requireAuth, async (req, res) => {
+  try {
+    const game = blackjackGames.get(req.user.id);
+    if (!game || game.status !== "playing") {
+      return res.status(400).json({ error: "No active game." });
+    }
+    await bjResolve(game);
+    req.session.user.credits = game.wallet;
+    res.json({ ok: true, ...bjPublicState(game, false) });
+  } catch (err) {
+    console.error("BLACKJACK STAND ERROR:", err);
+    res.status(500).json({ error: "Failed to process stand." });
+  }
+});
+
+app.post("/api/casino/blackjack/double", requireAuth, async (req, res) => {
+  try {
+    const game = blackjackGames.get(req.user.id);
+    if (!game || game.status !== "playing") {
+      return res.status(400).json({ error: "No active game." });
+    }
+    if (game.playerHand.length !== 2) {
+      return res.status(400).json({ error: "Can only double on the first two cards." });
+    }
+    const freshUser = await getUserById(req.user.id);
+    if (Number(freshUser?.credits || 0) < game.bet) {
+      return res.status(400).json({ error: "Not enough balance to double down." });
+    }
+    game.wallet = await spendCreditsTx(
+      req.user.id, game.bet, "blackjack_double", `Blackjack double down $${game.bet}`
+    );
+    game.bet = game.bet * 2;
+    game.playerHand.push(game.deck.pop());
+    const pv = bjHandValue(game.playerHand);
+    if (pv > 21) {
+      game.status = "player_bust"; game.payout = 0;
+    } else {
+      await bjResolve(game);
+    }
+    req.session.user.credits = game.wallet;
+    res.json({ ok: true, ...bjPublicState(game, false) });
+  } catch (err) {
+    if (err?.code === "INSUFFICIENT_CREDITS") {
+      return res.status(400).json({ error: "Not enough balance to double down." });
+    }
+    console.error("BLACKJACK DOUBLE ERROR:", err);
+    res.status(500).json({ error: "Failed to process double." });
   }
 });
 
