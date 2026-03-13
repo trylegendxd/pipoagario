@@ -944,12 +944,19 @@ async function sendPrivateMessage() {
 
 async function refreshMenuData() {
   if (!currentUser) return;
-  await Promise.all([
+
+  const results = await Promise.allSettled([
     refreshMenuWalletLeaderboard(),
     refreshFriendsList(),
     refreshFriendRequests(),
     refreshWallet()
   ]);
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("MENU DATA REFRESH ERROR:", result.reason);
+    }
+  }
 }
 
 async function loadMusicPlaylist() {
@@ -1860,8 +1867,21 @@ registerBtn?.addEventListener("click", async () => {
     }
 
     updateAuthUi(data.user);
-    await reconnectSocketAfterAuth();
-    await refreshMenuData();
+    setAuthStatus(`Logged in as ${data.user?.username || username}`);
+
+    try {
+      await reconnectSocketAfterAuth();
+    } catch (err) {
+      console.error("POST-REGISTER SOCKET ERROR:", err);
+      setMenuStatus("Account created, but live connection failed. Reload the page if needed.", true);
+    }
+
+    try {
+      await refreshMenuData();
+    } catch (err) {
+      console.error("POST-REGISTER MENU REFRESH ERROR:", err);
+    }
+
     setMenuStatus("Welcome bonus received: $5.00");
   } catch (err) {
     console.error("REGISTER ERROR:", err);
@@ -1881,8 +1901,20 @@ loginBtn?.addEventListener("click", async () => {
     }
 
     updateAuthUi(data.user);
-    await reconnectSocketAfterAuth();
-    await refreshMenuData();
+    setAuthStatus(`Logged in as ${data.user?.username || username}`);
+
+    try {
+      await reconnectSocketAfterAuth();
+    } catch (err) {
+      console.error("POST-LOGIN SOCKET ERROR:", err);
+      setMenuStatus("Logged in, but live connection failed. Reload the page if needed.", true);
+    }
+
+    try {
+      await refreshMenuData();
+    } catch (err) {
+      console.error("POST-LOGIN MENU REFRESH ERROR:", err);
+    }
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     setAuthStatus("Failed to log in.", true);
