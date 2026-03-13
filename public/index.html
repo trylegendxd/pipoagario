@@ -61,6 +61,21 @@
 
     <div class="menuShell">
       <div class="sideColumn">
+        <div class="menuCard casinoCard">
+          <div class="cardHeader">
+            <span>🎰 Casino</span>
+            <span class="liveBadge casinoSoonBadge">Soon</span>
+          </div>
+
+          <div class="casinoBody">
+            <div class="casinoIntro">Future features for quick bets and side games.</div>
+            <div class="casinoButtons">
+              <button type="button" class="casinoBtn" disabled>Blackjack</button>
+              <button type="button" class="casinoBtn" disabled>Roulette</button>
+            </div>
+          </div>
+        </div>
+
         <div class="menuCard leaderboardCard">
           <div class="cardHeader">
             <span>🏆 Richest Players</span>
@@ -193,12 +208,27 @@
           </div>
 
           <div class="customizeBody">
-            <div class="colorRow">
-              <label for="colorInput">Ball color</label>
-              <input id="colorInput" type="color" value="#33c3ff" />
+            <div class="colorRow colorPickerRow">
+              <label>Ball color</label>
+              <input id="colorInput" type="hidden" value="#3b82f6" />
+              <div class="colorSwatches" id="colorSwatches">
+                <button type="button" class="colorSwatch" data-color="#111111" data-color-name="Black" aria-label="Black" title="Black" style="--swatch-color:#111111;"></button>
+                <button type="button" class="colorSwatch" data-color="#ef4444" data-color-name="Red" aria-label="Red" title="Red" style="--swatch-color:#ef4444;"></button>
+                <button type="button" class="colorSwatch" data-color="#ec4899" data-color-name="Pink" aria-label="Pink" title="Pink" style="--swatch-color:#ec4899;"></button>
+                <button type="button" class="colorSwatch" data-color="#8b5cf6" data-color-name="Purple" aria-label="Purple" title="Purple" style="--swatch-color:#8b5cf6;"></button>
+                <button type="button" class="colorSwatch" data-color="#facc15" data-color-name="Yellow" aria-label="Yellow" title="Yellow" style="--swatch-color:#facc15;"></button>
+                <button type="button" class="colorSwatch" data-color="#f97316" data-color-name="Orange" aria-label="Orange" title="Orange" style="--swatch-color:#f97316;"></button>
+                <button type="button" class="colorSwatch" data-color="#8b5a2b" data-color-name="Brown" aria-label="Brown" title="Brown" style="--swatch-color:#8b5a2b;"></button>
+                <button type="button" class="colorSwatch" data-color="#9ca3af" data-color-name="Grey" aria-label="Grey" title="Grey" style="--swatch-color:#9ca3af;"></button>
+                <button type="button" class="colorSwatch" data-color="#3b82f6" data-color-name="Blue" aria-label="Blue" title="Blue" style="--swatch-color:#3b82f6;"></button>
+              </div>
             </div>
 
             <div class="colorPreviewWrap">
+              <div class="colorPreviewText">
+                <div class="colorPreviewLabel">Preview</div>
+                <div class="colorPreviewName" id="colorPreviewName">Blue</div>
+              </div>
               <div class="colorPreviewLabel">Preview</div>
               <div class="colorPreviewBall" id="colorPreviewBall"></div>
             </div>
@@ -209,6 +239,7 @@
 
     <div class="menuMusicPlayer" id="menuMusicPlayer">
       <div class="musicTopRow">
+        <button id="musicCloseBtn" type="button" class="musicCloseBtn" aria-label="Close music player">✕</button>
         <div class="musicNowLabel">Now Playing</div>
         <div class="musicSongName" id="musicSongName">No song loaded</div>
       </div>
