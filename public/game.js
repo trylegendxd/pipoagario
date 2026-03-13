@@ -546,12 +546,15 @@ function setBjPlaying(playing) {
 }
 
 function openBlackjackModal() {
-  if (!currentUser || !blackjackOverlay) return;
+  if (!blackjackOverlay) {
+    console.error("blackjackOverlay element not found — make sure index.html is updated.");
+    return;
+  }
   state.bjOpen = true;
   blackjackOverlay.classList.remove("hidden");
   updateBjBalance();
   hideBjResult();
-  // Draw pixel dealer
+  setBjStatus(currentUser ? "Choose your bet and deal." : "Log in to play.");
   drawPixelDealer();
 }
 
