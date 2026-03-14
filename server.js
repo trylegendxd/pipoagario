@@ -190,6 +190,21 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Create the session table explicitly so connect-pg-simple never races on first save
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire"
+    ON user_sessions ("expire")
+  `);
 }
 
 function rand(min, max) {
@@ -911,24 +926,32 @@ app.post("/api/register", async (req, res) => {
     const userId = await createUserWithBonus(username, passwordHash);
     const user = await getUserById(userId);
 
-    req.session.user = {
+    const sessionUser = {
       id: user.id,
       username: user.username,
       credits: Number(user.credits || 0)
     };
-    req.session.gameEntryReady = false;
-    req.session.gameEntryStake = null;
 
-    req.session.save((saveErr) => {
-      if (saveErr) {
-        console.error("REGISTER SESSION SAVE ERROR:", saveErr);
-        return res.status(500).json({ error: "Failed to register." });
+    // Regenerate session ID to avoid fixation, then persist
+    req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        console.error("REGISTER SESSION REGENERATE ERROR:", regenErr);
+        // User was created — still return success so they can log in manually
+        return res.json({ ok: true, user: sessionUser, bonusCredits: REGISTER_BONUS });
       }
 
-      res.json({
-        ok: true,
-        user: req.session.user,
-        bonusCredits: REGISTER_BONUS
+      req.session.user = sessionUser;
+      req.session.gameEntryReady = false;
+      req.session.gameEntryStake = null;
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error("REGISTER SESSION SAVE ERROR:", saveErr);
+          // User was created — still return success so they can log in manually
+          return res.json({ ok: true, user: sessionUser, bonusCredits: REGISTER_BONUS });
+        }
+
+        res.json({ ok: true, user: req.session.user, bonusCredits: REGISTER_BONUS });
       });
     });
   } catch (err) {
@@ -952,21 +975,31 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    req.session.user = {
+    const sessionUser = {
       id: user.id,
       username: user.username,
       credits: Number(user.credits || 0)
     };
-    req.session.gameEntryReady = false;
-    req.session.gameEntryStake = null;
 
-    req.session.save((saveErr) => {
-      if (saveErr) {
-        console.error("LOGIN SESSION SAVE ERROR:", saveErr);
+    // Regenerate session ID to avoid fixation, then persist
+    req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        console.error("LOGIN SESSION REGENERATE ERROR:", regenErr);
         return res.status(500).json({ error: "Failed to log in." });
       }
 
-      res.json({ ok: true, user: req.session.user });
+      req.session.user = sessionUser;
+      req.session.gameEntryReady = false;
+      req.session.gameEntryStake = null;
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error("LOGIN SESSION SAVE ERROR:", saveErr);
+          return res.status(500).json({ error: "Failed to log in." });
+        }
+
+        res.json({ ok: true, user: req.session.user });
+      });
     });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
