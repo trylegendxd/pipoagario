@@ -80,16 +80,10 @@ const rouletteOpenBtn = document.getElementById("rouletteOpenBtn");
 const rouletteOverlay = document.getElementById("rouletteOverlay");
 const closeRouletteBtn = document.getElementById("closeRouletteBtn");
 const rouletteBalanceValue = document.getElementById("rouletteBalanceValue");
-const rouletteAmountButtons = document.getElementById("rouletteAmountButtons");
-const rouletteBetRedBtn = document.getElementById("rouletteBetRedBtn");
-const rouletteBetBlackBtn = document.getElementById("rouletteBetBlackBtn");
-const rouletteSelectedBet = document.getElementById("rouletteSelectedBet");
-const rouletteNumberGrid = document.getElementById("rouletteNumberGrid");
 const rouletteSpinBtn = document.getElementById("rouletteSpinBtn");
 const rouletteStatus = document.getElementById("rouletteStatus");
 const rouletteResultValue = document.getElementById("rouletteResultValue");
 const rouletteWheelCanvas = document.getElementById("rouletteWheelCanvas");
-const rouletteWheelCtx = rouletteWheelCanvas ? rouletteWheelCanvas.getContext("2d") : null;
 
 // ── Blackjack DOM refs ──
 const blackjackOpenBtn = document.getElementById("blackjackOpenBtn");
@@ -1131,7 +1125,6 @@ function updateWalletUi(wallet) {
   state.wallet = Number(wallet || 0);
   if (walletValue) walletValue.textContent = formatMoney(state.wallet);
   updateRouletteBalance();
-  renderRouletteUi();
   updateBjBalance();
 }
 
