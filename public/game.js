@@ -572,85 +572,82 @@ function drawPixelDealer() {
   const W = cvs.width, H = cvs.height;
   c.clearRect(0, 0, W, H);
 
-  // Scale: each "pixel" = 8px
-  const P = 8;
+  // Each "pixel" = 4px so the whole sprite fits in 80x100
+  const P = 4;
   function px(col, row, w, h, color) {
     c.fillStyle = color;
     c.fillRect(col * P, row * P, (w || 1) * P, (h || 1) * P);
   }
 
-  // Suit symbol background glow
-  c.fillStyle = "rgba(0,0,0,0.18)";
-  c.beginPath();
-  c.ellipse(W / 2, H * 0.55, 56, 70, 0, 0, Math.PI * 2);
-  c.fill();
+  // Top hat brim
+  px(3, 4, 14, 1, "#d4af37");
+  // Hat crown
+  px(5, 0, 10, 5, "#1a1a2e");
+  // Hat band
+  px(5, 3, 10, 1, "#dc2626");
 
-  // Body (tuxedo)
-  px(3, 10, 14, 12, "#1a1a2e");   // jacket
-  px(4, 10, 12, 2, "#2d2d44");    // lapel area
-  // White shirt
-  px(7, 10, 6, 8, "#f0ede6");
-  // Bow tie
-  px(7, 9, 2, 1, "#dc2626");
-  px(10, 9, 2, 1, "#dc2626");
-  px(9, 9, 2, 1, "#b91c1c");
-  // Buttons
-  px(9, 12, 2, 1, "#d4af37");
-  px(9, 14, 2, 1, "#d4af37");
-  // Arms
-  px(2, 11, 2, 9, "#1a1a2e");
-  px(16, 11, 2, 9, "#1a1a2e");
-  // Hands
-  px(2, 19, 2, 2, "#c9956b");
-  px(16, 19, 2, 2, "#c9956b");
+  // Head
+  px(4, 5, 12, 7, "#c9956b");
+  // Hair top
+  px(4, 5, 12, 1, "#2c1810");
+  // Ears
+  px(3, 7, 1, 3, "#b8845a");
+  px(16, 7, 1, 3, "#b8845a");
+  // Eyebrows
+  px(6, 7, 3, 1, "#2c1810");
+  px(11, 7, 3, 1, "#2c1810");
+  // Eyes
+  px(6, 8, 3, 2, "#1a1a2e");
+  px(11, 8, 3, 2, "#1a1a2e");
+  // Eye shine
+  px(6, 8, 1, 1, "#ffffff");
+  px(11, 8, 1, 1, "#ffffff");
+  // Nose
+  px(9, 9, 2, 2, "#b07a52");
+  // Smile
+  px(7, 11, 1, 1, "#2c1810");
+  px(8, 12, 4, 1, "#2c1810");
+  px(12, 11, 1, 1, "#2c1810");
 
   // Neck
-  px(8, 8, 4, 2, "#c9956b");
-  // Head
-  px(5, 2, 10, 7, "#c9956b");
-  // Hair
-  px(5, 2, 10, 2, "#2c1810");
-  px(5, 3, 1, 1, "#2c1810");
-  px(14, 3, 1, 1, "#2c1810");
-  // Ears
-  px(4, 4, 2, 2, "#b8845a");
-  px(14, 4, 2, 2, "#b8845a");
-  // Eyes
-  px(7, 5, 2, 1, "#1a1a2e");
-  px(11, 5, 2, 1, "#1a1a2e");
-  // Eye shine
-  px(7, 5, 1, 1, "#ffffff");
-  px(11, 5, 1, 1, "#ffffff");
-  // Eyebrows
-  px(7, 4, 2, 1, "#2c1810");
-  px(11, 4, 2, 1, "#2c1810");
-  // Smile
-  px(8, 7, 4, 1, "#2c1810");
-  px(7, 6, 1, 1, "#2c1810");
-  px(12, 6, 1, 1, "#2c1810");
-  // Nose
-  px(9, 6, 2, 1, "#b07a52");
+  px(8, 12, 4, 2, "#c9956b");
 
-  // Top hat
-  px(5, 0, 10, 1, "#d4af37");   // brim
-  px(7, -4, 6, 5, "#1a1a2e");  // crown (clipped at top)
-  px(7, 0, 6, 1, "#2d2d44");
+  // Shirt collar / bow tie
+  px(7, 13, 2, 1, "#f0ede6");
+  px(11, 13, 2, 1, "#f0ede6");
+  px(8, 13, 1, 1, "#dc2626");
+  px(10, 13, 1, 1, "#dc2626");
+  px(9, 13, 2, 2, "#b91c1c");
 
-  // Hat band
-  c.fillStyle = "#dc2626";
-  c.fillRect(7 * P, (-1) * P + P, 6 * P, P * 0.6);
+  // Jacket body
+  px(3, 14, 14, 10, "#1a1a2e");
+  // White shirt front
+  px(7, 14, 6, 8, "#f0ede6");
+  // Jacket lapels
+  px(5, 14, 2, 5, "#2d2d44");
+  px(13, 14, 2, 5, "#2d2d44");
+  // Buttons
+  px(9, 16, 2, 1, "#d4af37");
+  px(9, 18, 2, 1, "#d4af37");
+
+  // Arms
+  px(2, 15, 2, 7, "#1a1a2e");
+  px(16, 15, 2, 7, "#1a1a2e");
+  // Hands
+  px(2, 22, 2, 2, "#c9956b");
+  px(16, 22, 2, 2, "#c9956b");
 
   // Suit symbol on chest
   c.fillStyle = "#d4af37";
-  c.font = `bold ${P * 3}px serif`;
+  c.font = `bold ${P * 4}px serif`;
   c.textAlign = "center";
   c.textBaseline = "middle";
-  c.fillText("♠", W / 2, H * 0.78);
+  c.fillText("♠", W / 2, H * 0.82);
 
   // Shadow under character
-  c.fillStyle = "rgba(0,0,0,0.2)";
+  c.fillStyle = "rgba(0,0,0,0.22)";
   c.beginPath();
-  c.ellipse(W / 2, H - 6, 40, 8, 0, 0, Math.PI * 2);
+  c.ellipse(W / 2, H - 4, 28, 5, 0, 0, Math.PI * 2);
   c.fill();
 }
 
