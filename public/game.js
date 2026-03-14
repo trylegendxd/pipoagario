@@ -964,10 +964,19 @@ function updateWalletUi(wallet) {
   updateBjBalance();
 }
 
+let isInMatchmakingQueue = false;
+
 function setPlayButtonState(busy = false) {
   if (!playBtn) return;
-  playBtn.disabled = busy;
-  playBtn.textContent = busy ? "Loading..." : "JOIN GAME";
+  if (isInMatchmakingQueue) {
+    playBtn.disabled = false;
+    playBtn.textContent = "CANCEL";
+    playBtn.classList.add("cancelQueueBtn");
+  } else {
+    playBtn.disabled = busy;
+    playBtn.textContent = busy ? "Finding match..." : "JOIN GAME";
+    playBtn.classList.remove("cancelQueueBtn");
+  }
 }
 
 function setAuthButtonsLoggedIn(loggedIn) {
@@ -1979,6 +1988,12 @@ window.addEventListener("keyup", (e) => {
 });
 
 async function joinGame() {
+  // If already in queue, this button press = cancel
+  if (isInMatchmakingQueue) {
+    await cancelQueue();
+    return;
+  }
+
   if (isJoinInFlight || inMatch) return;
 
   if (!currentUser) {
@@ -1988,7 +2003,6 @@ async function joinGame() {
   }
 
   isJoinInFlight = true;
-  setPlayButtonState(true);
   setMenuStatus("");
   setWalletStatus("");
 
@@ -1997,6 +2011,8 @@ async function joinGame() {
 
     if (data.error) {
       setMenuStatus(data.error, true);
+      isJoinInFlight = false;
+      setPlayButtonState(false);
       return;
     }
 
@@ -2014,10 +2030,40 @@ async function joinGame() {
   } catch (err) {
     console.error("JOIN GAME ERROR:", err);
     setMenuStatus("Failed to start match.", true);
-  } finally {
     isJoinInFlight = false;
-    if (!inMatch) setPlayButtonState(false);
+    setPlayButtonState(false);
   }
+}
+
+async function cancelQueue() {
+  try {
+    socket.emit("cancelQueue");
+    await api("/api/game/cancel", {});
+  } catch (err) {
+    console.error("CANCEL QUEUE ERROR:", err);
+  }
+  isInMatchmakingQueue = false;
+  isJoinInFlight = false;
+  setPlayButtonState(false);
+  setMenuStatus("Cancelled queue.");
+  hideMatchmakingStatus();
+}
+
+function showMatchmakingStatus(data) {
+  const stake = data.stake || selectedStake;
+  const count = data.queueCount || 1;
+  const cd = data.countdown;
+  const names = (data.players || []).map(p => p.name).join(", ");
+
+  let msg = `⏳ Waiting for players with $${stake} stake... (${count} in queue: ${names})`;
+  if (cd !== null && cd !== undefined) {
+    msg = `🟢 Match found! Starting in ${cd}s... (${names})`;
+  }
+  setMenuStatus(msg, false);
+}
+
+function hideMatchmakingStatus() {
+  setMenuStatus("");
 }
 
 async function handleAddBalance() {
@@ -2314,6 +2360,8 @@ socket.on("connect", () => {
 socket.on("disconnect", () => {
   state.connected = false;
   inMatch = false;
+  isInMatchmakingQueue = false;
+  isJoinInFlight = false;
   setPlayButtonState(false);
   resetGameVisualState();
 
@@ -2324,6 +2372,34 @@ socket.on("disconnect", () => {
     setMenuStatus("Connection lost. Back in menu.", true);
   } else {
     showLandingWithAuth();
+  }
+});
+
+socket.on("matchmakingQueued", (data) => {
+  isInMatchmakingQueue = true;
+  isJoinInFlight = false;
+  setPlayButtonState(false); // re-renders as CANCEL
+  showMatchmakingStatus(data);
+});
+
+socket.on("matchmakingUpdate", (data) => {
+  showMatchmakingStatus(data);
+});
+
+socket.on("matchmakingCancelled", (data) => {
+  isInMatchmakingQueue = false;
+  isJoinInFlight = false;
+  setPlayButtonState(false);
+  setMenuStatus(data?.reason || "Queue cancelled.", true);
+  hideMatchmakingStatus();
+});
+
+socket.on("matchmakingJoined", (data) => {
+  isInMatchmakingQueue = false;
+  isJoinInFlight = false;
+  if (typeof data?.wallet !== "undefined") {
+    updateWalletUi(data.wallet);
+    if (currentUser) currentUser.credits = Number(data.wallet || 0);
   }
 });
 
@@ -2352,6 +2428,7 @@ socket.on("joinError", (data) => {
 
 socket.on("dead", async (data) => {
   inMatch = false;
+  isInMatchmakingQueue = false;
   resetGameVisualState();
   showMenu();
   setPlayButtonState(false);
@@ -2389,6 +2466,7 @@ socket.on("state", (serverState) => {
 
 socket.on("extracted", async (data) => {
   inMatch = false;
+  isInMatchmakingQueue = false;
   resetGameVisualState();
   showMenu();
   setPlayButtonState(false);
