@@ -1630,31 +1630,39 @@ function playPrevTrack() {
 }
 
 async function checkSession() {
+  let data = null;
+
+  // Step 1: fetch session - on any failure just treat as logged out
   try {
-    const data = await api("/api/me");
-
-    // If the server is unreachable, data.user will be undefined — treat as logged out
-    updateAuthUi(data.user || null);
-
-    if (data.user) {
-      // Socket connect and menu refresh are best-effort — a failure here must NOT
-      // overwrite the auth status with "Failed to check session."
-      try {
-        await reconnectSocketAfterAuth();
-      } catch (sockErr) {
-        console.error("SESSION CHECK SOCKET ERROR:", sockErr);
-        setMenuStatus("Live connection failed. Reload the page if needed.", true);
-      }
-
-      try {
-        await refreshMenuData();
-      } catch (menuErr) {
-        console.error("SESSION CHECK MENU REFRESH ERROR:", menuErr);
-      }
-    }
+    data = await api("/api/me");
   } catch (err) {
-    console.error("SESSION CHECK ERROR:", err);
-    setAuthStatus("Could not reach the server. Please reload.", true);
+    console.error("SESSION CHECK FETCH ERROR:", err);
+    data = { user: null };
+  }
+
+  const user = (data && data.user) || null;
+
+  try {
+    updateAuthUi(user);
+  } catch (err) {
+    console.error("SESSION CHECK UPDATEUI ERROR:", err);
+  }
+
+  if (!user) return;
+
+  // Step 2: reconnect socket - best-effort, must not break auth state
+  try {
+    await reconnectSocketAfterAuth();
+  } catch (sockErr) {
+    console.error("SESSION CHECK SOCKET ERROR:", sockErr);
+    setMenuStatus("Live connection failed. Reload the page if needed.", true);
+  }
+
+  // Step 3: refresh menu data - best-effort
+  try {
+    await refreshMenuData();
+  } catch (menuErr) {
+    console.error("SESSION CHECK MENU REFRESH ERROR:", menuErr);
   }
 }
 
