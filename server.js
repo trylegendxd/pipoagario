@@ -84,6 +84,7 @@ const playerByUserId = new Map();
 const socketsByUserId = new Map();
 const blackjackGames = new Map();
 const spectators = new Map();
+const finishingExtractionIds = new Set();
 
 // matchmakingQueue[stake] = [ { userId, socketId, name, color } ]
 const matchmakingQueue = {};
@@ -95,7 +96,6 @@ const food = [];
 const viruses = [];
 const bots = [];
 const chatMessages = [];
-let lastMultiHumanAt = 0;
 
 function radiusFromMass(mass) {
   return Math.sqrt(mass) * 4.8;
@@ -310,7 +310,6 @@ function createHumanPlayer(socketId, user, payload) {
     wantsExtract: false,
     extracting: false,
     extractTicks: 0,
-    finishingExtraction: false,
     cashValue: 0,
     cells: [randomSpawnCell()],
     alive: true,
@@ -330,7 +329,6 @@ function createBot(index) {
     wantsExtract: false,
     extracting: false,
     extractTicks: 0,
-    finishingExtraction: false,
     cashValue: 0,
     cells: [randomSpawnCell()],
     alive: true,
@@ -742,18 +740,20 @@ async function mmLaunchMatch(stake) {
 async function checkMatchEnd() {
   const humanPlayers = [...players.values()];
   if (humanPlayers.length >= 2) {
-    lastMultiHumanAt = Date.now();
+    checkMatchEnd.lastMultiHumanAt = Date.now();
     return;
   }
 
   if (humanPlayers.length === 0) {
-    lastMultiHumanAt = 0;
+    checkMatchEnd.lastMultiHumanAt = 0;
     return;
   }
 
   if (humanPlayers.length !== 1) return;
 
   const winner = humanPlayers[0];
+  const lastMultiHumanAt = Number(checkMatchEnd.lastMultiHumanAt || 0);
+
   // Never auto-end a match that effectively started as a solo round.
   if (!lastMultiHumanAt) return;
   // Also ensure the "2+ humans seen" timestamp belongs to this player's current run.
@@ -761,7 +761,7 @@ async function checkMatchEnd() {
   if (Number(winner.joinedAt || 0) >= lastMultiHumanAt) return;
 
   // Only auto-extract if they have cash on the line and are not already being finalized.
-  if (!winner || Number(winner.cashValue || 0) <= 0 || winner.finishingExtraction) return;
+  if (!winner || Number(winner.cashValue || 0) <= 0 || finishingExtractionIds.has(winner.id)) return;
 
   console.log(`Match ended — last player: ${winner.name}`);
   await completeExtraction(winner);
@@ -2108,9 +2108,9 @@ function botThink(bot) {
 async function completeExtraction(player) {
   const socket = io.sockets.sockets.get(player.id);
   if (!player || !socket) return;
-  if (player.finishingExtraction) return;
+  if (finishingExtractionIds.has(player.id)) return;
 
-  player.finishingExtraction = true;
+  finishingExtractionIds.add(player.id);
 
   const totalValue = Number(player.cashValue || 0);
   const payout = Number((totalValue * EXTRACTION_PAYOUT_RATE).toFixed(2));
@@ -2130,6 +2130,7 @@ async function completeExtraction(player) {
     }
 
     players.delete(player.id);
+    finishingExtractionIds.delete(player.id);
     if (player.userId) {
       playerByUserId.delete(player.userId);
       socketsByUserId.delete(player.userId);
@@ -2159,7 +2160,7 @@ async function completeExtraction(player) {
     player.extracting = false;
     player.extractTicks = 0;
     player.wantsExtract = false;
-    player.finishingExtraction = false;
+    finishingExtractionIds.delete(player.id);
   }
 }
 
@@ -2606,7 +2607,7 @@ async function tick() {
   await checkMatchEnd();
 
   const finishedExtractions = [...players.values()].filter(
-    (p) => p.extracting && !p.finishingExtraction && p.extractTicks >= EXTRACTION_HOLD_TICKS
+    (p) => p.extracting && !finishingExtractionIds.has(p.id) && p.extractTicks >= EXTRACTION_HOLD_TICKS
   );
 
   for (const player of finishedExtractions) {
