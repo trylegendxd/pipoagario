@@ -168,9 +168,10 @@ const state = {
 };
 
 const snapshots = [];
-const INTERPOLATION_DELAY = 16;
+const INTERPOLATION_DELAY = 80;  // render 80ms behind server — smooths over jitter
+const SNAPSHOT_BUFFER = 20;        // keep more frames for better interpolation
 const EXTRACTION_SECONDS = 6;
-const EXTRACTION_TICKS = 6 * 45;
+const EXTRACTION_TICKS = 6 * 60;  // updated for 60 tick rate
 
 let isJoinInFlight = false;
 let inMatch = false;
@@ -1711,8 +1712,10 @@ function updateCamera() {
   const biggestCellMass = Math.max(...me.cells.map((c) => c.mass));
   const biggestRadius = radiusFromMass(biggestCellMass);
 
-  state.cameraX += (center.x - state.cameraX) * 0.12;
-  state.cameraY += (center.y - state.cameraY) * 0.12;
+  // Frame-rate independent camera — same feel at 60 or 144Hz
+  const camAlpha = 1 - Math.pow(0.82, 60 / (1000 / Math.max(8, performance.now() - (_lastFrameTime || performance.now()))));
+  state.cameraX += (center.x - state.cameraX) * Math.min(1, camAlpha * 2.2);
+  state.cameraY += (center.y - state.cameraY) * Math.min(1, camAlpha * 2.2);
 
   const fitZoomX = (W * 0.22) / Math.max(biggestRadius, 1);
   const fitZoomY = (H * 0.22) / Math.max(biggestRadius, 1);
@@ -1720,7 +1723,9 @@ function updateCamera() {
   const massZoom = 1.1 / Math.pow(Math.max(totalMass, 20), 0.16);
   const targetZoom = Math.min(fitZoom, massZoom);
 
-  state.zoom += (targetZoom - state.zoom) * 0.12;
+  // Zoom in snappier, zoom out a touch slower (feels more natural)
+  const zoomDiff = targetZoom - state.zoom;
+  state.zoom += zoomDiff * (zoomDiff > 0 ? 0.10 : 0.16);
   state.zoom = Math.max(0.02, Math.min(1.2, state.zoom));
 }
 
@@ -1759,22 +1764,19 @@ function drawGrid() {
     const offsetX = ((-state.cameraX * state.zoom) % grid + grid) % grid;
     const offsetY = ((-state.cameraY * state.zoom) % grid + grid) % grid;
 
+    // Single path for all grid lines — huge perf win over one stroke() per line
+    ctx.beginPath();
     ctx.strokeStyle = "#ececec";
     ctx.lineWidth = 1;
-
     for (let x = offsetX; x <= W; x += grid) {
-      ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, H);
-      ctx.stroke();
     }
-
     for (let y = offsetY; y <= H; y += grid) {
-      ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(W, y);
-      ctx.stroke();
     }
+    ctx.stroke();
   }
 
   const center = worldToScreen(0, 0);
@@ -1788,57 +1790,61 @@ function drawGrid() {
 }
 
 function drawFood() {
+  // Group food by color and draw each group as a single path — massive batching win
+  const rr = 8 * state.zoom; // food radius is always 8
+  if (rr < 0.5) return; // too small to see, skip entirely
+
+  const byColor = new Map();
   for (const f of state.food) {
-    const s = worldToScreen(f.x, f.y);
-    const rr = f.r * state.zoom;
-
-    if (s.x < -rr || s.x > W + rr || s.y < -rr || s.y > H + rr) continue;
-
+    const sx = (f.x - state.cameraX) * state.zoom + W / 2;
+    const sy = (f.y - state.cameraY) * state.zoom + H / 2;
+    if (sx < -rr || sx > W + rr || sy < -rr || sy > H + rr) continue;
+    let arr = byColor.get(f.color);
+    if (!arr) { arr = []; byColor.set(f.color, arr); }
+    arr.push(sx, sy);
+  }
+  for (const [color, pts] of byColor) {
     ctx.beginPath();
-    ctx.arc(s.x, s.y, rr, 0, Math.PI * 2);
-    ctx.fillStyle = f.color;
+    for (let i = 0; i < pts.length; i += 2) {
+      ctx.moveTo(pts[i] + rr, pts[i + 1]);
+      ctx.arc(pts[i], pts[i + 1], rr, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = color;
     ctx.fill();
   }
 }
 
 function drawViruses() {
+  const spikes = 18;
+  // Batch all virus fills, then all virus strokes — 2 draw calls total
+  ctx.beginPath();
   for (const virus of state.viruses) {
-    const s = worldToScreen(virus.x, virus.y);
+    const sx = (virus.x - state.cameraX) * state.zoom + W / 2;
+    const sy = (virus.y - state.cameraY) * state.zoom + H / 2;
     const rr = virus.r * state.zoom;
-
-    if (s.x < -rr * 1.5 || s.x > W + rr * 1.5 || s.y < -rr * 1.5 || s.y > H + rr * 1.5) {
-      continue;
-    }
-
-    const spikes = 18;
-
-    ctx.beginPath();
+    if (sx < -rr * 1.5 || sx > W + rr * 1.5 || sy < -rr * 1.5 || sy > H + rr * 1.5) continue;
     for (let i = 0; i <= spikes; i++) {
       const a = (i / spikes) * Math.PI * 2;
       const rad = rr * (i % 2 === 0 ? 1.14 : 0.88);
-      const px = s.x + Math.cos(a) * rad;
-      const py = s.y + Math.sin(a) * rad;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+      const px = sx + Math.cos(a) * rad;
+      const py = sy + Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.closePath();
-    ctx.fillStyle = "#33d65c";
-    ctx.fill();
-    ctx.strokeStyle = "#239842";
-    ctx.lineWidth = Math.max(1, 2 * state.zoom);
-    ctx.stroke();
   }
+  ctx.fillStyle = "#33d65c";
+  ctx.fill();
+  ctx.strokeStyle = "#239842";
+  ctx.lineWidth = Math.max(1, 2 * state.zoom);
+  ctx.stroke();
 }
 
 function drawPlayers() {
-  const sorted = [...state.players].sort((a, b) => {
-    const am = a.cells.reduce((s, c) => s + c.mass, 0);
-    const bm = b.cells.reduce((s, c) => s + c.mass, 0);
-    return am - bm;
-  });
+  // state.players already has totalMass from the server — use it, avoid re-summing
+  const sorted = [...state.players].sort((a, b) => (a.totalMass || 0) - (b.totalMass || 0));
 
   for (const player of sorted) {
-    const totalMass = player.cells.reduce((s, c) => s + c.mass, 0) || 1;
+    const totalMass = player.totalMass || 1;
     const totalValue = Number(player.cashValue || 0);
 
     for (const cell of player.cells) {
@@ -1847,26 +1853,41 @@ function drawPlayers() {
 
       if (s.x < -r * 2 || s.x > W + r * 2 || s.y < -r * 2 || s.y > H + r * 2) continue;
 
+      // Draw cell fill
       ctx.beginPath();
       ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
       ctx.fillStyle = player.color;
       ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,0.15)";
-      ctx.lineWidth = 2;
+
+      // Shine highlight — small inner arc gives depth without gradient overhead
+      if (r > 8) {
+        ctx.beginPath();
+        ctx.arc(s.x - r * 0.28, s.y - r * 0.28, r * 0.42, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.18)";
+        ctx.fill();
+      }
+
+      // Outline
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(0,0,0,0.22)";
+      ctx.lineWidth = Math.min(3, Math.max(1.5, r * 0.04));
       ctx.stroke();
 
       if (r > 18) {
         const cellValue = totalValue * (cell.mass / totalMass);
-
-        ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = `bold ${Math.max(13, r * 0.30)}px Arial`;
-        ctx.fillText(player.name, s.x, s.y - 9);
 
-        ctx.fillStyle = "#14a83c";
-        ctx.font = `bold ${Math.max(12, r * 0.23)}px Arial`;
-        ctx.fillText(formatBallMoney(cellValue), s.x, s.y + 15);
+        const nameFontSize = Math.max(13, r * 0.30) | 0;
+        ctx.font = `bold ${nameFontSize}px Arial`;
+        ctx.fillStyle = "#fff";
+        ctx.fillText(player.name, s.x, s.y - r * 0.18);
+
+        const valFontSize = Math.max(11, r * 0.22) | 0;
+        ctx.font = `bold ${valFontSize}px Arial`;
+        ctx.fillStyle = "#22c55e";
+        ctx.fillText(formatBallMoney(cellValue), s.x, s.y + r * 0.26);
       }
     }
   }
@@ -1938,7 +1959,8 @@ function updateHud() {
 }
 
 function render() {
-  ctx.fillStyle = "#ffffff";
+  if (!inMatch && !state.spectating) return; // nothing to render outside a match
+  ctx.fillStyle = "#f8f9fb";
   ctx.fillRect(0, 0, W, H);
   drawGrid();
   drawFood();
@@ -1977,15 +1999,26 @@ function interpolatePlayers(older, newer, alpha) {
 
   for (const [id, newPlayer] of newMap) {
     const oldPlayer = oldMap.get(id) || newPlayer;
+    const oldCells = oldPlayer.cells;
 
     out.push({
       ...newPlayer,
-      cells: newPlayer.cells.map((newCell, i) => {
-        const oldCell = oldPlayer.cells[i] || newCell;
+      cells: newPlayer.cells.map((newCell) => {
+        // Match each new cell to the nearest old cell by position
+        // This prevents index-mismatch teleports after splits/merges
+        let bestCell = oldCells[0] || newCell;
+        let bestDist = Infinity;
+        for (let k = 0; k < oldCells.length; k++) {
+          const oc = oldCells[k];
+          const dx = oc.x - newCell.x;
+          const dy = oc.y - newCell.y;
+          const d = dx * dx + dy * dy;
+          if (d < bestDist) { bestDist = d; bestCell = oc; }
+        }
         return {
           ...newCell,
-          x: lerp(oldCell.x, newCell.x, alpha),
-          y: lerp(oldCell.y, newCell.y, alpha)
+          x: lerp(bestCell.x, newCell.x, alpha),
+          y: lerp(bestCell.y, newCell.y, alpha)
         };
       })
     });
@@ -2566,7 +2599,7 @@ socket.on("state", (serverState) => {
     state: cloneStateForSnapshot(serverState)
   });
 
-  while (snapshots.length > 10) {
+  while (snapshots.length > SNAPSHOT_BUFFER) {
     snapshots.shift();
   }
 
@@ -2643,22 +2676,28 @@ socket.on("privateMessage", (msg) => {
   }
 });
 
-setInterval(() => {
-  if (!state.connected || !inMatch) return;
+// Input is sent from the game loop (rAF) at display rate — no timer drift,
+// tightest possible mouse-to-server latency.
+let _lastInputTime = 0;
+const INPUT_INTERVAL_MS = 16; // ~60Hz cap to avoid flooding on 120Hz displays
 
-  socket.emit("input", {
-    mouseX: state.mouseX,
-    mouseY: state.mouseY,
-    split: state.splitQueued,
-    eject: state.ejectQueued,
-    extracting: state.extracting
-  });
-
-  state.splitQueued = false;
-  state.ejectQueued = false;
-}, 1000 / 60);
-
+let _lastFrameTime = 0;
 function loop() {
+  const now = performance.now();
+  // Send input at ~60Hz without timer drift
+  if (state.connected && inMatch && now - _lastInputTime >= INPUT_INTERVAL_MS) {
+    _lastInputTime = now;
+    socket.emit("input", {
+      mouseX: state.mouseX,
+      mouseY: state.mouseY,
+      split: state.splitQueued,
+      eject: state.ejectQueued,
+      extracting: state.extracting
+    });
+    state.splitQueued = false;
+    state.ejectQueued = false;
+  }
+
   const interpolated = getInterpolatedState();
 
   if (interpolated) {
@@ -2668,13 +2707,14 @@ function loop() {
     state.players = interpolated.players;
     state.leaderboard = interpolated.leaderboard;
 
-    if (typeof interpolated.wallet !== "undefined") {
+    if (typeof interpolated.wallet !== "undefined" && interpolated.wallet !== state.wallet) {
       updateWalletUi(interpolated.wallet);
     }
   }
 
   updateCamera();
   render();
+  _lastFrameTime = performance.now();
   requestAnimationFrame(loop);
 }
 
