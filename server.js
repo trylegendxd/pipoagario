@@ -687,9 +687,13 @@ async function mmLaunchMatch(stake) {
   const entries = q.splice(0, q.length); // take all queued players
   matchmakingQueue[stake] = [];
 
-  // Generate a unique match ID so checkMatchEnd can confirm this was a real multi-player match
+  // Generate a unique match ID shared by all players in this match
   const matchId = Math.random().toString(36).slice(2);
-  const matchSize = entries.length;
+
+  // ── Phase 1: do ALL async DB work first, before touching the players Map ──
+  // This prevents checkMatchEnd from firing mid-launch when only 1 player has
+  // been added but the second hasn't been inserted yet (async race condition).
+  const readyPlayers = [];
 
   for (const entry of entries) {
     const sock = io.sockets.sockets.get(entry.socketId);
@@ -721,24 +725,42 @@ async function mmLaunchMatch(stake) {
       });
       player.cashValue = stake;
       player.stake = stake;
-      // Tag this player with the match they belong to
       player.matchId = matchId;
-      player.matchSize = matchSize;
 
-      players.set(sock.id, player);
-      playerByUserId.set(entry.userId, sock.id);
-      socketsByUserId.set(entry.userId, sock.id);
-
-      sock.emit("matchmakingJoined", { wallet });
-      sock.emit("chatHistory", chatMessages);
-      sock.emit("joined", { ok: true, wallet });
-
-      addChatMessage("SERVER", `${player.name} joined the game`);
+      readyPlayers.push({ player, sock, wallet });
     } catch (err) {
       console.error("MM LAUNCH ERROR for", entry.name, err);
       const sock2 = io.sockets.sockets.get(entry.socketId);
       sock2?.emit("matchmakingCancelled", { reason: "Failed to enter match." });
     }
+  }
+
+  // If fewer than 2 players survived validation, abort — don't start a solo match.
+  if (readyPlayers.length < 2) {
+    for (const { sock } of readyPlayers) {
+      sock.emit("matchmakingCancelled", { reason: "Not enough players could be verified." });
+    }
+    return;
+  }
+
+  // Stamp the final confirmed match size on every player now that we know it
+  const matchSize = readyPlayers.length;
+  for (const { player } of readyPlayers) {
+    player.matchSize = matchSize;
+  }
+
+  // ── Phase 2: atomically insert all players into the live Map at once ──
+  // From this point on checkMatchEnd will see the correct player count immediately.
+  for (const { player, sock, wallet } of readyPlayers) {
+    players.set(sock.id, player);
+    playerByUserId.set(player.userId, sock.id);
+    socketsByUserId.set(player.userId, sock.id);
+
+    sock.emit("matchmakingJoined", { wallet });
+    sock.emit("chatHistory", chatMessages);
+    sock.emit("joined", { ok: true, wallet });
+
+    addChatMessage("SERVER", `${player.name} joined the game`);
   }
 }
 
@@ -2101,6 +2123,11 @@ function botThink(bot) {
 async function completeExtraction(player) {
   const socket = io.sockets.sockets.get(player.id);
   if (!player || !socket) return;
+
+  // Guard against being called twice on the same player in the same or consecutive ticks
+  // (e.g. checkMatchEnd + finishedExtractions loop both firing for the same player).
+  if (player._extractionInProgress) return;
+  player._extractionInProgress = true;
 
   const totalValue = Number(player.cashValue || 0);
   const payout = Number((totalValue * EXTRACTION_PAYOUT_RATE).toFixed(2));
