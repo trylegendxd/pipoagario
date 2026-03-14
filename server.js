@@ -85,6 +85,9 @@ const socketsByUserId = new Map();
 const blackjackGames = new Map();
 const spectators = new Map();
 
+// True only while a real match is in progress (2+ players loaded in)
+let matchActive = false;
+
 // matchmakingQueue[stake] = [ { userId, socketId, name, color } ]
 const matchmakingQueue = {};
 for (const s of [1, 5, 10, 20]) matchmakingQueue[s] = [];
@@ -750,7 +753,13 @@ async function mmLaunchMatch(stake) {
   }
 
   // ── Phase 2: atomically insert all players into the live Map at once ──
+  // Reset world and bots fresh for this match, then mark the match as active.
   // From this point on checkMatchEnd will see the correct player count immediately.
+  resetWorldObjects();
+  bots.length = 0;
+  respawnMissingBots();
+  matchActive = true;
+
   for (const { player, sock, wallet } of readyPlayers) {
     players.set(sock.id, player);
     playerByUserId.set(player.userId, sock.id);
@@ -766,6 +775,7 @@ async function mmLaunchMatch(stake) {
 
 // Check if only 1 human player remains in an active match and auto-extract them
 async function checkMatchEnd() {
+  if (!matchActive) return;
   const humanPlayers = [...players.values()];
   if (humanPlayers.length !== 1) return;
 
@@ -774,12 +784,24 @@ async function checkMatchEnd() {
   if (!winner || Number(winner.cashValue || 0) <= 0) return;
 
   // Only fire if this player was part of a real multi-player match (matchSize >= 2).
-  // This prevents a race condition where checkMatchEnd triggers during the async
-  // mmLaunchMatch loop after the first player is added but before the second one is.
   if (!winner.matchId || Number(winner.matchSize || 1) < 2) return;
 
-  console.log(`Match ended -- last player: ${winner.name}`);
-  await completeExtraction(winner);
+  // Collect all remaining cashValue sitting inside bots and award it to the winner
+  let botPool = 0;
+  for (const bot of bots) {
+    botPool += Number(bot.cashValue || 0);
+    bot.cashValue = 0;
+  }
+  if (botPool > 0) {
+    winner.cashValue = Number(winner.cashValue || 0) + botPool;
+    console.log(`Match end: added $${botPool.toFixed(2)} from bots to winner ${winner.name}`);
+  }
+
+  // Mark match over so bots stop running and tick goes idle
+  matchActive = false;
+
+  console.log(`Match ended -- winner: ${winner.name}, cashValue: $${winner.cashValue.toFixed(2)}`);
+  await completeExtraction(winner, true);
 }
 
 async function requireAuth(req, res, next) {
@@ -2120,7 +2142,7 @@ function botThink(bot) {
   bot.mouse.y = Math.max(-1400, Math.min(1400, moveY));
 }
 
-async function completeExtraction(player) {
+async function completeExtraction(player, isMatchWin = false) {
   const socket = io.sockets.sockets.get(player.id);
   if (!player || !socket) return;
 
@@ -2137,8 +2159,10 @@ async function completeExtraction(player) {
       const wallet = await addCreditsTx(
         player.userId,
         payout,
-        "extraction_payout",
-        `Extracted from match (${Math.round(EXTRACTION_PAYOUT_RATE * 100)}% payout)`
+        isMatchWin ? "match_win_payout" : "extraction_payout",
+        isMatchWin
+          ? `Won the match (${Math.round(EXTRACTION_PAYOUT_RATE * 100)}% payout)`
+          : `Extracted from match (${Math.round(EXTRACTION_PAYOUT_RATE * 100)}% payout)`
       );
 
       if (socket.request?.session?.user) {
@@ -2150,6 +2174,11 @@ async function completeExtraction(player) {
     if (player.userId) {
       playerByUserId.delete(player.userId);
       socketsByUserId.delete(player.userId);
+    }
+
+    // If no players remain after this extraction, end the match
+    if (players.size === 0) {
+      matchActive = false;
     }
 
     if (socket.request?.session) {
@@ -2165,11 +2194,14 @@ async function completeExtraction(player) {
       kept: totalValue,
       tax,
       stake: Number(player.stake || 0),
-      message: `You extracted ${payout.toFixed(2)} back to your wallet.`
+      isMatchWin,
+      message: isMatchWin
+        ? `You won the match! Taking home $${payout.toFixed(2)}.`
+        : `You extracted $${payout.toFixed(2)} back to your wallet.`
     });
 
     markSocketAsSpectator(socket);
-    addChatMessage("SERVER", `${player.name} extracted from the match`);
+    addChatMessage("SERVER", isMatchWin ? `${player.name} won the match!` : `${player.name} extracted from the match`);
   } catch (err) {
     console.error("EXTRACTION ERROR:", err);
     socket.emit("extractFailed", { error: "Failed to extract." });
@@ -2596,6 +2628,9 @@ io.on("connection", (socket) => {
 });
 
 async function tick() {
+  // Nothing to simulate until a real match is running
+  if (!matchActive) return;
+
   respawnMissingBots();
 
   for (const bot of bots) {
@@ -2676,8 +2711,8 @@ async function tick() {
   }
 }
 
-resetWorldObjects();
-respawnMissingBots();
+// World and bots are initialised fresh when each match launches (in mmLaunchMatch).
+// Nothing runs at startup so players always see a clean world.
 
 async function start() {
   await initDb();
