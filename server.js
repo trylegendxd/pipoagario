@@ -756,6 +756,9 @@ async function checkMatchEnd() {
   const winner = humanPlayers[0];
   // Never auto-end a match that effectively started as a solo round.
   if (!lastMultiHumanAt) return;
+  // Also ensure the "2+ humans seen" timestamp belongs to this player's current run.
+  // This prevents stale timestamps from previous matches auto-ending a fresh solo join.
+  if (Number(winner.joinedAt || 0) >= lastMultiHumanAt) return;
 
   // Only auto-extract if they have cash on the line and are not already being finalized.
   if (!winner || Number(winner.cashValue || 0) <= 0 || winner.finishingExtraction) return;
