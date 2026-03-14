@@ -691,15 +691,27 @@ canvas {
   place-items: center;
   background: rgba(12, 20, 33, 0.32);
   pointer-events: auto;
+  animation: overlayFadeIn 0.18s ease forwards;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .postMatchCard {
   width: min(460px, calc(100vw - 28px));
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.97);
   border: 1px solid #d8e3f2;
   border-radius: 20px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
-  padding: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  padding: 24px 22px;
+  animation: cardPopIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes cardPopIn {
+  from { opacity: 0; transform: scale(0.88) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .postMatchTitle {
@@ -714,8 +726,9 @@ canvas {
 }
 
 .postMatchTitle.isWin {
-  color: #15803d;
-  text-shadow: 0 0 20px rgba(21, 128, 61, 0.35);
+  color: #b45309;
+  text-shadow: 0 0 22px rgba(251, 191, 36, 0.55);
+  letter-spacing: 1px;
 }
 
 .postMatchDetails {
