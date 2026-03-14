@@ -239,14 +239,18 @@ function updateRouletteTotalStake() {
 
 // Build the European roulette table layout
 // Rows: 1-34 in columns of 3, plus 0 spanning, plus 2:1 column
+// Maps outside bet type → label
+const OUTSIDE_BET_LABELS = {
+  col3: "2:1", col2: "2:1", col1: "2:1",
+  dozen1: "1st 12", dozen2: "2nd 12", dozen3: "3rd 12",
+  low: "1–18", even: "Even", red: "Red",
+  black: "Black", odd: "Odd", high: "19–36"
+};
+
 function buildRouletteTable() {
   const table = document.getElementById("rouletteTable");
   if (!table) return;
   table.innerHTML = "";
-
-  // Standard layout: 3 rows × 12 columns + zero + dozens + 1-18/even/etc
-  // We'll render the number grid in 3 rows (top=3,6,9… mid=2,5,8… bot=1,4,7…)
-  // matching a real roulette table orientation
 
   const grid = document.createElement("div");
   grid.className = "rtGrid";
@@ -256,47 +260,88 @@ function buildRouletteTable() {
   zeroCell.classList.add("rtZero");
   grid.appendChild(zeroCell);
 
-  // Numbers 1–36 in 3 rows, 12 columns
-  // Row 0 = top row: 3,6,9,12,15,18,21,24,27,30,33,36
-  // Row 1 = mid:     2,5,8,11,14,17,20,23,26,29,32,35
-  // Row 2 = bot:     1,4,7,10,13,16,19,22,25,28,31,34
+  // Numbers 1–36: row 0=top (3,6,9…36), row 1=mid (2,5,8…35), row 2=bot (1,4,7…34)
+  // Col button types: top row = col3 (n%3===0), mid = col2 (n%3===2), bot = col1 (n%3===1)
+  const colTypes = ["col3", "col2", "col1"];
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 12; col++) {
       const num = col * 3 + (3 - row);
       const cell = makeTableCell(num);
       grid.appendChild(cell);
     }
-    // 2:1 button at end of each row
+    // 2:1 column button — clickable outside bet
     const twoToOne = document.createElement("div");
     twoToOne.className = "rt2to1";
     twoToOne.textContent = "2:1";
+    twoToOne.dataset.outside = colTypes[row];
+    twoToOne.id = `rtOutside-${colTypes[row]}`;
+    twoToOne.addEventListener("click", () => onOutsideBetClick(colTypes[row]));
     grid.appendChild(twoToOne);
   }
 
   table.appendChild(grid);
 
-  // Bottom: dozens + 1-18/even/red/black/odd/19-36
+  // Dozens row
   const extras = document.createElement("div");
   extras.className = "rtExtras";
-  // These are display-only labels (no bets on them in this version)
-  const labels = ["1st 12", "2nd 12", "3rd 12"];
-  labels.forEach(l => {
+  [["dozen1","1st 12"],["dozen2","2nd 12"],["dozen3","3rd 12"]].forEach(([type, label]) => {
     const d = document.createElement("div");
     d.className = "rtDozen";
-    d.textContent = l;
+    d.textContent = label;
+    d.dataset.outside = type;
+    d.id = `rtOutside-${type}`;
+    d.addEventListener("click", () => onOutsideBetClick(type));
+    // chip stack placeholder
+    const stack = document.createElement("div");
+    stack.className = "rtChipStack";
+    stack.id = `rtStack-outside-${type}`;
+    d.appendChild(stack);
     extras.appendChild(d);
   });
   table.appendChild(extras);
 
+  // Bottom even-money row
   const bottomRow = document.createElement("div");
   bottomRow.className = "rtBottom";
-  ["1–18","Even","Red","Black","Odd","19–36"].forEach(l => {
+  [["low","1–18"],["even","Even"],["red","Red"],["black","Black"],["odd","Odd"],["high","19–36"]].forEach(([type, label]) => {
     const d = document.createElement("div");
     d.className = "rtBottomCell";
-    d.textContent = l;
+    d.textContent = label;
+    d.dataset.outside = type;
+    d.id = `rtOutside-${type}`;
+    d.addEventListener("click", () => onOutsideBetClick(type));
+    // chip stack placeholder
+    const stack = document.createElement("div");
+    stack.className = "rtChipStack";
+    stack.id = `rtStack-outside-${type}`;
+    d.appendChild(stack);
     bottomRow.appendChild(d);
   });
   table.appendChild(bottomRow);
+}
+
+function onOutsideBetClick(type) {
+  if (state.rouletteSpinning) return;
+  const MAX_OUTSIDE = 20;
+  const current = tableBets.get(type) || 0;
+  const next = Number((current + rouletteChipValue).toFixed(2));
+  if (next > MAX_OUTSIDE) {
+    setRouletteStatus(`Max $${MAX_OUTSIDE} per outside bet.`, true);
+    return;
+  }
+  if (rouletteTotalStake() + rouletteChipValue > 20) {
+    setRouletteStatus("Max total bet is $20.", true);
+    return;
+  }
+  if (next > state.wallet) {
+    setRouletteStatus("Not enough balance.", true);
+    return;
+  }
+  tableBets.set(type, next);
+  renderTableBets();
+  updateRouletteTotalStake();
+  setRouletteStatus("");
+  updateRouletteSpinBtn();
 }
 
 function makeTableCell(num) {
@@ -348,12 +393,14 @@ function renderTableBets() {
   // Clear all stacks
   document.querySelectorAll(".rtChipStack").forEach(el => el.innerHTML = "");
 
-  for (const [num, total] of tableBets) {
-    const stack = document.getElementById(`rtStack-${num}`);
+  for (const [key, total] of tableBets) {
+    // key is either a number (0-36) or a string ("red", "black", etc.)
+    const stackId = typeof key === "string"
+      ? `rtStack-outside-${key}`
+      : `rtStack-${key}`;
+    const stack = document.getElementById(stackId);
     if (!stack || total <= 0) continue;
 
-    // Show a visual chip stack representing the total
-    // Pick the chip color that best represents the dominant denomination
     let chipCls = "chip-50";
     if (total >= 5) chipCls = "chip-5";
     else if (total >= 2) chipCls = "chip-2";
@@ -463,7 +510,8 @@ function animateRouletteToNumber(winningNumber) {
 
   const sliceDeg = 360 / EURO_ROULETTE_ORDER.length;
   const centerDeg = -90 + index * sliceDeg + sliceDeg / 2;
-  const desiredNorm = ((-centerDeg % 360) + 360) % 360;
+  // We need: centerDeg + rotation ≡ -90 (mod 360)  →  rotation ≡ -90 - centerDeg
+  const desiredNorm = ((-90 - centerDeg) % 360 + 360) % 360;
   const current = Number(state.rouletteRotation || 0);
   const currentNorm = ((current % 360) + 360) % 360;
   let delta = desiredNorm - currentNorm;
@@ -487,10 +535,33 @@ function animateRouletteToNumber(winningNumber) {
   });
 }
 
+const OUTSIDE_WIN_CONDITIONS = {
+  red:    n => n > 0 && [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n),
+  black:  n => n > 0 && ![1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n),
+  odd:    n => n > 0 && n % 2 === 1,
+  even:   n => n > 0 && n % 2 === 0,
+  low:    n => n >= 1 && n <= 18,
+  high:   n => n >= 19 && n <= 36,
+  dozen1: n => n >= 1 && n <= 12,
+  dozen2: n => n >= 13 && n <= 24,
+  dozen3: n => n >= 25 && n <= 36,
+  col1:   n => n > 0 && n % 3 === 1,
+  col2:   n => n > 0 && n % 3 === 2,
+  col3:   n => n > 0 && n % 3 === 0,
+};
+
 function highlightWinningCell(winningNumber) {
-  document.querySelectorAll(".rtCell").forEach(c => c.classList.remove("rtWin"));
+  document.querySelectorAll(".rtCell,.rtBottomCell,.rtDozen,.rt2to1").forEach(c => c.classList.remove("rtWin"));
+  // Highlight the number cell
   const cell = document.querySelector(`.rtCell[data-num="${winningNumber}"]`);
   if (cell) cell.classList.add("rtWin");
+  // Highlight winning outside bet cells
+  for (const [type, fn] of Object.entries(OUTSIDE_WIN_CONDITIONS)) {
+    if (fn(Number(winningNumber))) {
+      const el = document.getElementById(`rtOutside-${type}`);
+      if (el) el.classList.add("rtWin");
+    }
+  }
 }
 
 function openRouletteModal() {
@@ -518,8 +589,13 @@ async function handleRouletteSpin() {
   if (!currentUser) { setRouletteStatus("You need to be logged in.", true); return; }
 
   const bets = [];
-  for (const [num, amt] of tableBets) {
-    if (amt > 0) bets.push({ number: num, amount: amt });
+  for (const [key, amt] of tableBets) {
+    if (amt <= 0) continue;
+    if (typeof key === "string") {
+      bets.push({ type: "outside", bet: key, amount: amt });
+    } else {
+      bets.push({ number: key, amount: amt });
+    }
   }
   if (bets.length === 0) { setRouletteStatus("Place at least one chip first.", true); return; }
 
@@ -549,7 +625,7 @@ async function handleRouletteSpin() {
     const resultEl = document.getElementById("rouletteResultValue");
     if (resultEl) {
       resultEl.textContent = `${data.winningNumber} ${colorLabel}`;
-      resultEl.style.color = data.winningColor === "red" ? "#ef4444" : data.winningColor === "green" ? "#16a34a" : "#111";
+      resultEl.style.color = data.winningColor === "red" ? "#ef4444" : data.winningColor === "green" ? "#4ade80" : "#e2e8f0";
     }
 
     if (data.totalPayout > 0) {
