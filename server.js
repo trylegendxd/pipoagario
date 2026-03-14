@@ -72,7 +72,9 @@ const ALLOWED_PLAYER_COLORS = new Set([
   "#3b82f6"
 ]);
 
-const ROULETTE_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
+const ROULETTE_ALLOWED_CHIP_VALUES = new Set([0.5, 1, 2, 5]); // chip denominations
+const ROULETTE_MAX_PER_NUMBER = 5;   // max total bet per number
+const ROULETTE_MAX_TOTAL_BET = 20;   // max total stake per spin
 const BLACKJACK_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
 const MATCHMAKING_COUNTDOWN_SECS = 10;
 const ROULETTE_RED_NUMBERS = new Set([
@@ -992,58 +994,60 @@ app.get("/api/balance", requireAuth, (req, res) => {
 
 app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
   try {
-    const amount = Number(req.body?.amount);
-    const betType = String(req.body?.betType || "").trim().toLowerCase();
-    const rawBetValue = req.body?.betValue;
-
-    if (!ROULETTE_ALLOWED_BET_AMOUNTS.has(amount)) {
-      return res.status(400).json({ error: "Roulette bets must be between $1 and $5." });
+    // bets: Array of { number: 0-36, amount: 0.5|1|2|5 }
+    const bets = req.body?.bets;
+    if (!Array.isArray(bets) || bets.length === 0) {
+      return res.status(400).json({ error: "Place at least one bet." });
     }
 
-    if (!["color", "number"].includes(betType)) {
-      return res.status(400).json({ error: "Invalid roulette bet type." });
+    // Validate each bet
+    const perNumberTotals = new Map();
+    let totalStake = 0;
+    for (const bet of bets) {
+      const num = Number(bet.number);
+      const amt = Number(bet.amount);
+      if (!Number.isInteger(num) || num < 0 || num > 36) {
+        return res.status(400).json({ error: `Invalid number: ${num}` });
+      }
+      if (!ROULETTE_ALLOWED_CHIP_VALUES.has(amt)) {
+        return res.status(400).json({ error: `Invalid chip value: ${amt}` });
+      }
+      const prevTotal = perNumberTotals.get(num) || 0;
+      if (prevTotal + amt > ROULETTE_MAX_PER_NUMBER) {
+        return res.status(400).json({ error: `Max $${ROULETTE_MAX_PER_NUMBER} per number.` });
+      }
+      perNumberTotals.set(num, prevTotal + amt);
+      totalStake += amt;
     }
-
-    let betValue;
-    if (betType === "color") {
-      betValue = String(rawBetValue || "").trim().toLowerCase();
-      if (!["red", "black"].includes(betValue)) {
-        return res.status(400).json({ error: "Color bets must be red or black." });
-      }
-    } else {
-      betValue = Number(rawBetValue);
-      if (!Number.isInteger(betValue) || betValue < 0 || betValue > 36) {
-        return res.status(400).json({ error: "Number bets must be between 0 and 36." });
-      }
+    totalStake = Number(totalStake.toFixed(2));
+    if (totalStake > ROULETTE_MAX_TOTAL_BET) {
+      return res.status(400).json({ error: `Max total bet is $${ROULETTE_MAX_TOTAL_BET}.` });
     }
 
     let wallet = await spendCreditsTx(
-      req.user.id,
-      amount,
-      "roulette_bet",
-      betType === "color" ? `Roulette ${betValue}` : `Roulette number ${betValue}`
+      req.user.id, totalStake, "roulette_bet",
+      `Roulette spin: $${totalStake} across ${bets.length} bet(s)`
     );
 
     const winningNumber = getRandomRouletteNumber();
     const winningColor = getRouletteColor(winningNumber);
 
-    let win = false;
-    let payout = 0;
+    // Calculate winnings — number bet pays 35:1 (36x total), stake already spent
+    let totalPayout = 0;
+    const betResults = bets.map((bet) => {
+      const num = Number(bet.number);
+      const amt = Number(bet.amount);
+      const won = num === winningNumber;
+      const payout = won ? Number((amt * 36).toFixed(2)) : 0;
+      totalPayout += payout;
+      return { number: num, amount: amt, won, payout };
+    });
+    totalPayout = Number(totalPayout.toFixed(2));
 
-    if (betType === "color") {
-      win = winningColor !== "green" && betValue === winningColor;
-      payout = win ? amount * 2 : 0;
-    } else {
-      win = Number(betValue) === winningNumber;
-      payout = win ? amount * 36 : 0;
-    }
-
-    if (payout > 0) {
+    if (totalPayout > 0) {
       wallet = await addCreditsTx(
-        req.user.id,
-        payout,
-        "roulette_win",
-        `Roulette win on ${winningNumber} ${winningColor}`
+        req.user.id, totalPayout, "roulette_win",
+        `Roulette win on ${winningNumber} (${winningColor}): +$${totalPayout}`
       );
     }
 
@@ -1052,20 +1056,17 @@ app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
     res.json({
       ok: true,
       wallet,
-      amount,
-      betType,
-      betValue,
+      totalStake,
       winningNumber,
       winningColor,
-      win,
-      payout,
-      profit: payout - amount
+      totalPayout,
+      profit: Number((totalPayout - totalStake).toFixed(2)),
+      betResults
     });
   } catch (err) {
     if (err?.code === "INSUFFICIENT_CREDITS") {
       return res.status(400).json({ error: "Not enough balance." });
     }
-
     console.error("ROULETTE SPIN ERROR:", err);
     res.status(500).json({ error: "Failed to spin roulette." });
   }
@@ -2693,10 +2694,20 @@ async function tick() {
       continue;
     }
 
-    const target = pickSpectateTarget(spec?.targetId || null, 1);
-    if (!target) continue;
-
-    spectators.set(socketId, { targetId: target.id });
+    // Keep the current target if they are still alive.
+    // Only find a new target if the current one died or left.
+    let target = spec?.targetId ? players.get(spec.targetId) : null;
+    if (!target || !target.cells.length) {
+      // Current target gone — pick the next available human
+      target = pickSpectateTarget(spec?.targetId || null, 1);
+      if (!target) continue; // no one left to spectate
+      spectators.set(socketId, { targetId: target.id });
+      // Notify the client their target changed
+      sock.emit("spectateStatus", {
+        targetId: target.id,
+        targetName: target.name
+      });
+    }
 
     try {
       const snapshot = buildSnapshotFor(target);
