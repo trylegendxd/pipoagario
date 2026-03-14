@@ -682,6 +682,82 @@ canvas {
   font-family: inherit;
 }
 
+
+.postMatchOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  background: rgba(12, 20, 33, 0.32);
+  pointer-events: auto;
+}
+
+.postMatchCard {
+  width: min(460px, calc(100vw - 28px));
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #d8e3f2;
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+  padding: 20px;
+}
+
+.postMatchTitle {
+  margin: 0 0 12px;
+  font-size: 34px;
+  color: #1f3652;
+}
+
+.postMatchTitle.isDeath {
+  color: #8b0000;
+  text-shadow: 0 0 16px rgba(180, 0, 0, 0.3);
+}
+
+.postMatchDetails {
+  display: grid;
+  gap: 8px;
+  color: #31455f;
+  font-size: 15px;
+}
+
+.postMatchSpectateStatus {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f2f7ff;
+  color: #37506e;
+  font-size: 14px;
+}
+
+.postMatchActions {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.postMatchActions button {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+#postMatchSpectateBtn {
+  background: linear-gradient(180deg, #75b9ff, #3f92ea);
+  color: #fff;
+}
+
+.postMatchHint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #667d98;
+  text-align: center;
+}
+
 .landingScreen {
   position: fixed;
   inset: 0;
