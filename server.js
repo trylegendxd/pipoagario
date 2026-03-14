@@ -739,6 +739,7 @@ async function mmLaunchMatch(stake) {
 // Check if only 1 human player remains in an active match and auto-extract them
 async function checkMatchEnd() {
   const humanPlayers = [...players.values()];
+
   if (humanPlayers.length >= 2) {
     checkMatchEnd.lastMultiHumanAt = Date.now();
     return;
@@ -752,6 +753,9 @@ async function checkMatchEnd() {
   if (humanPlayers.length !== 1) return;
 
   const winner = humanPlayers[0];
+  // Only auto-extract if they have cash on the line (i.e. they're in a real match)
+  if (!winner || Number(winner.cashValue || 0) <= 0) return;
+
   const lastMultiHumanAt = Number(checkMatchEnd.lastMultiHumanAt || 0);
 
   // Never auto-end a match that effectively started as a solo round.
@@ -760,8 +764,8 @@ async function checkMatchEnd() {
   // This prevents stale timestamps from previous matches auto-ending a fresh solo join.
   if (Number(winner.joinedAt || 0) >= lastMultiHumanAt) return;
 
-  // Only auto-extract if they have cash on the line and are not already being finalized.
-  if (!winner || Number(winner.cashValue || 0) <= 0 || finishingExtractionIds.has(winner.id)) return;
+  // Avoid duplicate extraction finalization races for the same winner.
+  if (finishingExtractionIds.has(winner.id)) return;
 
   console.log(`Match ended — last player: ${winner.name}`);
   await completeExtraction(winner);
