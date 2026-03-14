@@ -1774,12 +1774,12 @@ function drawPlayers() {
         ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = `${Math.max(12, r * 0.28)}px Arial`;
-        ctx.fillText(player.name, s.x, s.y - 8);
+        ctx.font = `bold ${Math.max(13, r * 0.30)}px Arial`;
+        ctx.fillText(player.name, s.x, s.y - 9);
 
-        ctx.fillStyle = "#39ff76";
-        ctx.font = `${Math.max(10, r * 0.19)}px Arial`;
-        ctx.fillText(formatBallMoney(cellValue), s.x, s.y + 14);
+        ctx.fillStyle = "#14a83c";
+        ctx.font = `bold ${Math.max(12, r * 0.23)}px Arial`;
+        ctx.fillText(formatBallMoney(cellValue), s.x, s.y + 15);
       }
     }
   }
