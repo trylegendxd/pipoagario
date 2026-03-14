@@ -83,6 +83,7 @@ const players = new Map();
 const playerByUserId = new Map();
 const socketsByUserId = new Map();
 const blackjackGames = new Map();
+const spectators = new Map();
 
 // matchmakingQueue[stake] = [ { userId, socketId, name, color } ]
 const matchmakingQueue = {};
@@ -94,6 +95,7 @@ const food = [];
 const viruses = [];
 const bots = [];
 const chatMessages = [];
+let lastMultiHumanAt = 0;
 
 function radiusFromMass(mass) {
   return Math.sqrt(mass) * 4.8;
@@ -308,6 +310,7 @@ function createHumanPlayer(socketId, user, payload) {
     wantsExtract: false,
     extracting: false,
     extractTicks: 0,
+    finishingExtraction: false,
     cashValue: 0,
     cells: [randomSpawnCell()],
     alive: true,
@@ -327,6 +330,7 @@ function createBot(index) {
     wantsExtract: false,
     extracting: false,
     extractTicks: 0,
+    finishingExtraction: false,
     cashValue: 0,
     cells: [randomSpawnCell()],
     alive: true,
@@ -715,6 +719,7 @@ async function mmLaunchMatch(stake) {
         color: entry.color
       });
       player.cashValue = stake;
+      player.stake = stake;
 
       players.set(sock.id, player);
       playerByUserId.set(entry.userId, sock.id);
@@ -736,11 +741,24 @@ async function mmLaunchMatch(stake) {
 // Check if only 1 human player remains in an active match and auto-extract them
 async function checkMatchEnd() {
   const humanPlayers = [...players.values()];
+  if (humanPlayers.length >= 2) {
+    lastMultiHumanAt = Date.now();
+    return;
+  }
+
+  if (humanPlayers.length === 0) {
+    lastMultiHumanAt = 0;
+    return;
+  }
+
   if (humanPlayers.length !== 1) return;
 
   const winner = humanPlayers[0];
-  // Only auto-extract if they have cash on the line (i.e. they're in a real match)
-  if (!winner || Number(winner.cashValue || 0) <= 0) return;
+  // Never auto-end a match that effectively started as a solo round.
+  if (!lastMultiHumanAt) return;
+
+  // Only auto-extract if they have cash on the line and are not already being finalized.
+  if (!winner || Number(winner.cashValue || 0) <= 0 || winner.finishingExtraction) return;
 
   console.log(`Match ended — last player: ${winner.name}`);
   await completeExtraction(winner);
@@ -2087,6 +2105,9 @@ function botThink(bot) {
 async function completeExtraction(player) {
   const socket = io.sockets.sockets.get(player.id);
   if (!player || !socket) return;
+  if (player.finishingExtraction) return;
+
+  player.finishingExtraction = true;
 
   const totalValue = Number(player.cashValue || 0);
   const payout = Number((totalValue * EXTRACTION_PAYOUT_RATE).toFixed(2));
@@ -2117,12 +2138,17 @@ async function completeExtraction(player) {
       socket.request.session.save(() => {});
     }
 
+    const tax = Number((totalValue - payout).toFixed(2));
+
     socket.emit("extracted", {
       payout,
       kept: totalValue,
+      tax,
+      stake: Number(player.stake || 0),
       message: `You extracted ${payout.toFixed(2)} back to your wallet.`
     });
 
+    markSocketAsSpectator(socket);
     addChatMessage("SERVER", `${player.name} extracted from the match`);
   } catch (err) {
     console.error("EXTRACTION ERROR:", err);
@@ -2130,6 +2156,7 @@ async function completeExtraction(player) {
     player.extracting = false;
     player.extractTicks = 0;
     player.wantsExtract = false;
+    player.finishingExtraction = false;
   }
 }
 
@@ -2139,8 +2166,12 @@ function eliminateHuman(player, eaterName) {
   if (socket) {
     socket.emit("dead", {
       by: eaterName || null,
+      stake: Number(player.stake || 0),
+      cashValue: Number(player.cashValue || 0),
       message: eaterName ? `You were eaten by ${eaterName}.` : "You died."
     });
+
+    markSocketAsSpectator(socket);
   }
 
   player.alive = false;
@@ -2332,6 +2363,39 @@ async function buildSnapshotFor(targetPlayer) {
   };
 }
 
+function getHumanSpectateList() {
+  return [...players.values()]
+    .filter((p) => isHuman(p) && p.alive && p.cells.length)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+function pickSpectateTarget(currentTargetId, direction = 1) {
+  const humans = getHumanSpectateList();
+  if (!humans.length) return null;
+
+  const currentIndex = humans.findIndex((p) => p.id === currentTargetId);
+  if (currentIndex === -1) return humans[0];
+
+  const nextIndex = (currentIndex + (direction >= 0 ? 1 : -1) + humans.length) % humans.length;
+  return humans[nextIndex];
+}
+
+function markSocketAsSpectator(socket, preferredTargetId = null) {
+  const target = pickSpectateTarget(preferredTargetId, 1);
+  if (!target) {
+    spectators.set(socket.id, { targetId: null });
+    socket.emit("spectateStatus", { error: "No live human players to spectate right now." });
+    return;
+  }
+
+  spectators.set(socket.id, { targetId: target.id });
+  socket.emit("spectateStatus", {
+    targetId: target.id,
+    targetName: target.name
+  });
+}
+
+
 io.on("connection", (socket) => {
   console.log("socket connected:", socket.id);
 
@@ -2339,6 +2403,8 @@ io.on("connection", (socket) => {
     try {
       const req = socket.request;
       const sessionUser = req.session?.user;
+
+      spectators.delete(socket.id);
 
       if (!sessionUser?.id) {
         socket.emit("joinError", { error: "You must be logged in." });
@@ -2431,6 +2497,34 @@ io.on("connection", (socket) => {
     if (typeof input?.extracting === "boolean") player.wantsExtract = input.extracting;
   });
 
+  socket.on("spectateStart", () => {
+    if (players.has(socket.id)) return;
+    markSocketAsSpectator(socket, spectators.get(socket.id)?.targetId || null);
+  });
+
+  socket.on("spectateSwitch", (payload) => {
+    if (players.has(socket.id)) return;
+
+    const direction = Number(payload?.direction) >= 0 ? 1 : -1;
+    const currentTargetId = spectators.get(socket.id)?.targetId || null;
+    const target = pickSpectateTarget(currentTargetId, direction);
+
+    if (!target) {
+      socket.emit("spectateStatus", { error: "No live human players to spectate right now." });
+      return;
+    }
+
+    spectators.set(socket.id, { targetId: target.id });
+    socket.emit("spectateStatus", {
+      targetId: target.id,
+      targetName: target.name
+    });
+  });
+
+  socket.on("stopSpectating", () => {
+    spectators.delete(socket.id);
+  });
+
   socket.on("cancelQueue", () => {
     for (const stake of ALLOWED_STAKES) {
       const q = matchmakingQueue[stake];
@@ -2457,6 +2551,8 @@ io.on("connection", (socket) => {
         break;
       }
     }
+
+    spectators.delete(socket.id);
 
     const player = players.get(socket.id);
 
@@ -2507,7 +2603,7 @@ async function tick() {
   await checkMatchEnd();
 
   const finishedExtractions = [...players.values()].filter(
-    (p) => p.extracting && p.extractTicks >= EXTRACTION_HOLD_TICKS
+    (p) => p.extracting && !p.finishingExtraction && p.extractTicks >= EXTRACTION_HOLD_TICKS
   );
 
   for (const player of finishedExtractions) {
@@ -2527,6 +2623,32 @@ async function tick() {
       sock.volatile.emit("state", snapshot);
     } catch (err) {
       console.error("SNAPSHOT ERROR:", err);
+    }
+  }
+
+  for (const [socketId, spec] of spectators.entries()) {
+    const sock = io.sockets.sockets.get(socketId);
+    if (!sock || players.has(socketId)) {
+      spectators.delete(socketId);
+      continue;
+    }
+
+    const target = pickSpectateTarget(spec?.targetId || null, 1);
+    if (!target) continue;
+
+    spectators.set(socketId, { targetId: target.id });
+
+    try {
+      const snapshot = await buildSnapshotFor(target);
+      sock.volatile.emit("state", {
+        ...snapshot,
+        wallet: undefined,
+        spectating: true,
+        spectateTargetId: target.id,
+        spectateTargetName: target.name
+      });
+    } catch (err) {
+      console.error("SPECTATOR SNAPSHOT ERROR:", err);
     }
   }
 }
