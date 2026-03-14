@@ -967,6 +967,25 @@ async function reconnectSocketAfterAuth() {
   }
 }
 
+function formatMoney(value) {
+  const n = Number(value || 0);
+  return "$" + n.toFixed(2);
+}
+
+function formatBallMoney(value) {
+  const n = Number(value || 0);
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "k";
+  return "$" + n.toFixed(2);
+}
+
+function radiusFromMass(mass) {
+  return Math.sqrt(mass) * 4.8;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
 function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
@@ -1631,8 +1650,6 @@ function playPrevTrack() {
 
 async function checkSession() {
   let data = null;
-
-  // Step 1: fetch session - on any failure just treat as logged out
   try {
     data = await api("/api/me");
   } catch (err) {
@@ -1641,16 +1658,9 @@ async function checkSession() {
   }
 
   const user = (data && data.user) || null;
-
-  try {
-    updateAuthUi(user);
-  } catch (err) {
-    console.error("SESSION CHECK UPDATEUI ERROR:", err);
-  }
-
+  try { updateAuthUi(user); } catch (e) { console.error(e); }
   if (!user) return;
 
-  // Step 2: reconnect socket - best-effort, must not break auth state
   try {
     await reconnectSocketAfterAuth();
   } catch (sockErr) {
@@ -1658,7 +1668,6 @@ async function checkSession() {
     setMenuStatus("Live connection failed. Reload the page if needed.", true);
   }
 
-  // Step 3: refresh menu data - best-effort
   try {
     await refreshMenuData();
   } catch (menuErr) {
