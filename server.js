@@ -191,7 +191,6 @@ async function initDb() {
     )
   `);
 
-  // Create the session table explicitly so connect-pg-simple never races on first save
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_sessions (
       "sid" varchar NOT NULL COLLATE "default",
@@ -932,11 +931,9 @@ app.post("/api/register", async (req, res) => {
       credits: Number(user.credits || 0)
     };
 
-    // Regenerate session ID to avoid fixation, then persist
     req.session.regenerate((regenErr) => {
       if (regenErr) {
         console.error("REGISTER SESSION REGENERATE ERROR:", regenErr);
-        // User was created — still return success so they can log in manually
         return res.json({ ok: true, user: sessionUser, bonusCredits: REGISTER_BONUS });
       }
 
@@ -947,7 +944,6 @@ app.post("/api/register", async (req, res) => {
       req.session.save((saveErr) => {
         if (saveErr) {
           console.error("REGISTER SESSION SAVE ERROR:", saveErr);
-          // User was created — still return success so they can log in manually
           return res.json({ ok: true, user: sessionUser, bonusCredits: REGISTER_BONUS });
         }
 
@@ -981,7 +977,6 @@ app.post("/api/login", async (req, res) => {
       credits: Number(user.credits || 0)
     };
 
-    // Regenerate session ID to avoid fixation, then persist
     req.session.regenerate((regenErr) => {
       if (regenErr) {
         console.error("LOGIN SESSION REGENERATE ERROR:", regenErr);
@@ -1027,31 +1022,73 @@ app.get("/api/balance", requireAuth, (req, res) => {
   res.json({ ok: true, wallet: Number(req.user.credits || 0) });
 });
 
+// Outside bet types and their payout multipliers (stake returned + multiplier * stake)
+const OUTSIDE_BET_TYPES = new Set([
+  "red","black","odd","even","low","high",
+  "dozen1","dozen2","dozen3","col1","col2","col3"
+]);
+const ROULETTE_MAX_OUTSIDE_BET = 20;
+
+function resolveOutsideBet(betType, n) {
+  const redNums = ROULETTE_RED_NUMBERS;
+  if (n === 0) return 0; // zero loses all outside bets
+  switch (betType) {
+    case "red":    return redNums.has(n) ? 2 : 0;
+    case "black":  return !redNums.has(n) ? 2 : 0;
+    case "odd":    return n % 2 === 1 ? 2 : 0;
+    case "even":   return n % 2 === 0 ? 2 : 0;
+    case "low":    return n >= 1 && n <= 18 ? 2 : 0;
+    case "high":   return n >= 19 && n <= 36 ? 2 : 0;
+    case "dozen1": return n >= 1  && n <= 12 ? 3 : 0;
+    case "dozen2": return n >= 13 && n <= 24 ? 3 : 0;
+    case "dozen3": return n >= 25 && n <= 36 ? 3 : 0;
+    case "col1":   return n % 3 === 1 ? 3 : 0;
+    case "col2":   return n % 3 === 2 ? 3 : 0;
+    case "col3":   return n % 3 === 0 ? 3 : 0;
+    default: return 0;
+  }
+}
+
 app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
   try {
-    // bets: Array of { number: 0-36, amount: 0.5|1|2|5 }
+    // bets: Array of { number: 0-36, amount } OR { type:"outside", bet: string, amount }
     const bets = req.body?.bets;
     if (!Array.isArray(bets) || bets.length === 0) {
       return res.status(400).json({ error: "Place at least one bet." });
     }
 
-    // Validate each bet
+    // Validate all bets and compute total stake
     const perNumberTotals = new Map();
+    const perOutsideTotals = new Map();
     let totalStake = 0;
+
     for (const bet of bets) {
-      const num = Number(bet.number);
       const amt = Number(bet.amount);
-      if (!Number.isInteger(num) || num < 0 || num > 36) {
-        return res.status(400).json({ error: `Invalid number: ${num}` });
-      }
       if (!ROULETTE_ALLOWED_CHIP_VALUES.has(amt)) {
         return res.status(400).json({ error: `Invalid chip value: ${amt}` });
       }
-      const prevTotal = perNumberTotals.get(num) || 0;
-      if (prevTotal + amt > ROULETTE_MAX_PER_NUMBER) {
-        return res.status(400).json({ error: `Max $${ROULETTE_MAX_PER_NUMBER} per number.` });
+
+      if (bet.type === "outside") {
+        const betKey = String(bet.bet || "");
+        if (!OUTSIDE_BET_TYPES.has(betKey)) {
+          return res.status(400).json({ error: `Invalid outside bet: ${betKey}` });
+        }
+        const prev = perOutsideTotals.get(betKey) || 0;
+        if (prev + amt > ROULETTE_MAX_OUTSIDE_BET) {
+          return res.status(400).json({ error: `Max $${ROULETTE_MAX_OUTSIDE_BET} per outside bet.` });
+        }
+        perOutsideTotals.set(betKey, prev + amt);
+      } else {
+        const num = Number(bet.number);
+        if (!Number.isInteger(num) || num < 0 || num > 36) {
+          return res.status(400).json({ error: `Invalid number: ${num}` });
+        }
+        const prev = perNumberTotals.get(num) || 0;
+        if (prev + amt > ROULETTE_MAX_PER_NUMBER) {
+          return res.status(400).json({ error: `Max $${ROULETTE_MAX_PER_NUMBER} per number.` });
+        }
+        perNumberTotals.set(num, prev + amt);
       }
-      perNumberTotals.set(num, prevTotal + amt);
       totalStake += amt;
     }
     totalStake = Number(totalStake.toFixed(2));
@@ -1067,15 +1104,25 @@ app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
     const winningNumber = getRandomRouletteNumber();
     const winningColor = getRouletteColor(winningNumber);
 
-    // Calculate winnings — number bet pays 35:1 (36x total), stake already spent
+    // Calculate winnings
     let totalPayout = 0;
     const betResults = bets.map((bet) => {
-      const num = Number(bet.number);
       const amt = Number(bet.amount);
-      const won = num === winningNumber;
-      const payout = won ? Number((amt * 36).toFixed(2)) : 0;
+      let payout = 0;
+      let won = false;
+
+      if (bet.type === "outside") {
+        const multiplier = resolveOutsideBet(String(bet.bet), winningNumber);
+        payout = Number((amt * multiplier).toFixed(2));
+        won = payout > 0;
+      } else {
+        const num = Number(bet.number);
+        won = num === winningNumber;
+        payout = won ? Number((amt * 36).toFixed(2)) : 0;
+      }
+
       totalPayout += payout;
-      return { number: num, amount: amt, won, payout };
+      return { ...bet, won, payout };
     });
     totalPayout = Number(totalPayout.toFixed(2));
 
@@ -1140,7 +1187,6 @@ app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
 
     blackjackGames.set(req.user.id, game);
     req.session.user.credits = game.wallet;
-    req.session.save(() => {});
     res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
   } catch (err) {
     if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance." });
@@ -1194,7 +1240,6 @@ app.post("/api/casino/blackjack/double", requireAuth, async (req, res) => {
     if (pv > 21) { game.status = "player_bust"; game.payout = 0; }
     else { await bjResolve(game); }
     req.session.user.credits = game.wallet;
-    req.session.save(() => {});
     res.json({ ok: true, ...bjPublicState(game, false) });
   } catch (err) {
     if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance to double down." });
