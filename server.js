@@ -541,6 +541,8 @@ async function getSessionUser(req) {
     credits: Number(row.credits || 0)
   };
 
+  req.session.save(() => {});
+
   return req.session.user;
 }
 
@@ -1052,6 +1054,7 @@ app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
     }
 
     req.session.user.credits = wallet;
+    req.session.save(() => {});
 
     res.json({
       ok: true,
@@ -1104,6 +1107,7 @@ app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
 
     blackjackGames.set(req.user.id, game);
     req.session.user.credits = game.wallet;
+    req.session.save(() => {});
     res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
   } catch (err) {
     if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance." });
@@ -1121,6 +1125,7 @@ app.post("/api/casino/blackjack/hit", requireAuth, async (req, res) => {
     if (pv > 21) { game.status = "player_bust"; game.payout = 0; }
     else if (pv === 21) { await bjResolve(game); }
     req.session.user.credits = game.wallet;
+    req.session.save(() => {});
     res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
   } catch (err) {
     console.error("BLACKJACK HIT ERROR:", err);
@@ -1134,6 +1139,7 @@ app.post("/api/casino/blackjack/stand", requireAuth, async (req, res) => {
     if (!game || game.status !== "playing") return res.status(400).json({ error: "No active game." });
     await bjResolve(game);
     req.session.user.credits = game.wallet;
+    req.session.save(() => {});
     res.json({ ok: true, ...bjPublicState(game, false) });
   } catch (err) {
     console.error("BLACKJACK STAND ERROR:", err);
@@ -1155,6 +1161,7 @@ app.post("/api/casino/blackjack/double", requireAuth, async (req, res) => {
     if (pv > 21) { game.status = "player_bust"; game.payout = 0; }
     else { await bjResolve(game); }
     req.session.user.credits = game.wallet;
+    req.session.save(() => {});
     res.json({ ok: true, ...bjPublicState(game, false) });
   } catch (err) {
     if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance to double down." });
