@@ -2066,10 +2066,21 @@ function handleEntityVsEntity() {
           const d = distance(ac.x, ac.y, bc.x, bc.y);
 
           if (ac.mass > bc.mass * 1.12 && d < ar - br * 0.3) {
+            // Transfer proportional cash value for this cell
+            const bTotalMass = b.cells.reduce((s, c) => s + c.mass, 0);
+            const cellValueShare = bTotalMass > 0
+              ? (bc.mass / bTotalMass) * Number(b.cashValue || 0)
+              : 0;
+            if (cellValueShare > 0) {
+              a.cashValue = Number(a.cashValue || 0) + cellValueShare;
+              b.cashValue = Math.max(0, Number(b.cashValue || 0) - cellValueShare);
+            }
+
             ac.mass += bc.mass;
             b.cells.splice(bi, 1);
 
             if (b.cells.length === 0) {
+              // Sweep any remaining rounding dust
               a.cashValue = Number(a.cashValue || 0) + Number(b.cashValue || 0);
               b.cashValue = 0;
 
@@ -2077,10 +2088,21 @@ function handleEntityVsEntity() {
               else if (isBot(b)) eliminateBot(b.botIndex);
             }
           } else if (bc.mass > ac.mass * 1.12 && d < br - ar * 0.3) {
+            // Transfer proportional cash value for this cell
+            const aTotalMass = a.cells.reduce((s, c) => s + c.mass, 0);
+            const cellValueShare = aTotalMass > 0
+              ? (ac.mass / aTotalMass) * Number(a.cashValue || 0)
+              : 0;
+            if (cellValueShare > 0) {
+              b.cashValue = Number(b.cashValue || 0) + cellValueShare;
+              a.cashValue = Math.max(0, Number(a.cashValue || 0) - cellValueShare);
+            }
+
             bc.mass += ac.mass;
             a.cells.splice(ai, 1);
 
             if (a.cells.length === 0) {
+              // Sweep any remaining rounding dust
               b.cashValue = Number(b.cashValue || 0) + Number(a.cashValue || 0);
               a.cashValue = 0;
 
