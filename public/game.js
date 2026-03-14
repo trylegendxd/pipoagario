@@ -28,6 +28,14 @@ const chatBox = document.getElementById("chatBox");
 const chatMessagesEl = document.getElementById("chatMessages");
 const chatInput = document.getElementById("chatInput");
 
+const postMatchOverlay = document.getElementById("postMatchOverlay");
+const postMatchCard = document.getElementById("postMatchCard");
+const postMatchTitle = document.getElementById("postMatchTitle");
+const postMatchDetails = document.getElementById("postMatchDetails");
+const postMatchSpectateStatus = document.getElementById("postMatchSpectateStatus");
+const postMatchSpectateBtn = document.getElementById("postMatchSpectateBtn");
+const postMatchQuitBtn = document.getElementById("postMatchQuitBtn");
+
 const authPanel = document.getElementById("authPanel");
 const authUsername = document.getElementById("authUsername");
 const authPassword = document.getElementById("authPassword");
@@ -152,7 +160,11 @@ const state = {
   bjOpen: false,
   bjBetAmount: 1,
   bjPlaying: false,
-  bjGame: null
+  bjGame: null,
+  spectating: false,
+  spectateTargetId: null,
+  spectateTargetName: "",
+  postMatchSummary: null
 };
 
 const snapshots = [];
@@ -917,6 +929,60 @@ function setFriendsStatus(text, isError = false) {
   friendsStatus.style.color = isError ? "#c62828" : "#2e7d32";
 }
 
+function renderPostMatchSummary() {
+  const summary = state.postMatchSummary;
+  if (!postMatchTitle || !postMatchDetails || !summary) return;
+
+  const rows = [
+    `<div><strong>Stake:</strong> ${formatMoney(summary.stake || 0)}</div>`,
+    `<div><strong>Cash value:</strong> ${formatMoney(summary.cashValue || 0)}</div>`,
+    `<div><strong>Tax (5%):</strong> ${formatMoney(summary.tax || 0)}</div>`,
+    `<div><strong>Taking home:</strong> ${formatMoney(summary.takeHome || 0)}</div>`,
+    `<div><strong>Killed by:</strong> ${escapeHtml(summary.killedBy || "Nobody")}</div>`
+  ];
+
+  if (summary.isDeath) {
+    postMatchTitle.textContent = "YOU DIED";
+    postMatchTitle.classList.add("isDeath");
+  } else {
+    postMatchTitle.textContent = "Extraction Complete";
+    postMatchTitle.classList.remove("isDeath");
+  }
+
+  postMatchDetails.innerHTML = rows.join("");
+}
+
+function updateSpectateStatusText() {
+  if (!postMatchSpectateStatus) return;
+  if (!state.spectating) {
+    postMatchSpectateStatus.textContent = "You are not spectating.";
+    return;
+  }
+  const label = state.spectateTargetName ? `Spectating ${state.spectateTargetName}` : "Spectating...";
+  postMatchSpectateStatus.textContent = `${label} (use ← / → to switch)`;
+}
+
+function openPostMatchOverlay(summary) {
+  state.postMatchSummary = summary || null;
+  postMatchOverlay?.classList.remove("hidden");
+  postMatchCard?.classList.remove("hidden");
+  state.spectating = false;
+  state.spectateTargetId = null;
+  state.spectateTargetName = "";
+  renderPostMatchSummary();
+  updateSpectateStatusText();
+}
+
+function closePostMatchOverlay() {
+  postMatchOverlay?.classList.add("hidden");
+  postMatchCard?.classList.add("hidden");
+  state.postMatchSummary = null;
+  state.spectating = false;
+  state.spectateTargetId = null;
+  state.spectateTargetName = "";
+  updateSpectateStatusText();
+}
+
 function showToast(text) {
   if (!toastContainer || !text) return;
 
@@ -995,6 +1061,9 @@ function resetGameVisualState() {
   state.cameraY = 0;
   state.zoom = 1;
   state.extracting = false;
+  state.spectating = false;
+  state.spectateTargetId = null;
+  state.spectateTargetName = "";
   if (massValue) massValue.textContent = "0";
   if (gameLeaderboardEntries) gameLeaderboardEntries.innerHTML = "";
   setChatOpen(false);
@@ -1598,6 +1667,9 @@ function worldToScreen(x, y) {
 }
 
 function getMyPlayer() {
+  if (state.spectating && state.spectateTargetId) {
+    return state.players.find((p) => p.id === state.spectateTargetId) || null;
+  }
   return state.players.find((p) => p.id === state.myId) || null;
 }
 
@@ -1877,7 +1949,7 @@ function cloneStateForSnapshot(serverState) {
     food: (serverState.food || []).map((f) => ({ ...f })),
     viruses: (serverState.viruses || []).map((v) => ({ ...v })),
     leaderboard: (serverState.leaderboard || []).map((e) => ({ ...e })),
-    wallet: Number(serverState.wallet || 0),
+    wallet: typeof serverState.wallet !== "undefined" ? Number(serverState.wallet || 0) : undefined,
     players: (serverState.players || []).map((p) => ({
       id: p.id,
       name: p.name,
@@ -1961,6 +2033,12 @@ window.addEventListener("keydown", (e) => {
     if (inMatch) {
       setChatOpen(!chatOpen);
     }
+    return;
+  }
+
+  if (state.spectating && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    socket.emit("spectateSwitch", { direction: e.key === "ArrowRight" ? 1 : -1 });
     return;
   }
 
@@ -2352,6 +2430,18 @@ logoutBtn?.addEventListener("click", async () => {
 addBalanceBtn?.addEventListener("click", handleAddBalance);
 withdrawBtn?.addEventListener("click", handleWithdraw);
 
+postMatchSpectateBtn?.addEventListener("click", () => {
+  socket.emit("spectateStart");
+  state.spectating = true;
+  updateSpectateStatusText();
+});
+
+postMatchQuitBtn?.addEventListener("click", () => {
+  socket.emit("stopSpectating");
+  closePostMatchOverlay();
+  showMenu();
+});
+
 socket.on("connect", () => {
   state.connected = true;
   state.myId = socket.id;
@@ -2409,6 +2499,7 @@ socket.on("joined", (data) => {
   setPlayButtonState(false);
   setMenuStatus("");
   setWalletStatus("");
+  closePostMatchOverlay();
 
   if (gameLeaderboard) gameLeaderboard.classList.remove("hidden");
 
@@ -2430,9 +2521,17 @@ socket.on("dead", async (data) => {
   inMatch = false;
   isInMatchmakingQueue = false;
   resetGameVisualState();
-  showMenu();
+  hideMenusForGame();
   setPlayButtonState(false);
-  setMenuStatus(data?.message || "You died and returned to the menu.", true);
+  setMenuStatus(data?.message || "You died.", true);
+  openPostMatchOverlay({
+    isDeath: true,
+    stake: Number(data?.stake || 0),
+    cashValue: Number(data?.cashValue || 0),
+    tax: 0,
+    takeHome: 0,
+    killedBy: data?.by || "Unknown"
+  });
   await refreshMenuData();
 });
 
@@ -2449,6 +2548,13 @@ socket.on("chat", (msg) => {
 });
 
 socket.on("state", (serverState) => {
+  if (serverState?.spectating) {
+    state.spectating = true;
+    state.spectateTargetId = serverState.spectateTargetId || null;
+    state.spectateTargetName = serverState.spectateTargetName || "";
+    updateSpectateStatusText();
+  }
+
   snapshots.push({
     time: Date.now(),
     state: cloneStateForSnapshot(serverState)
@@ -2468,15 +2574,35 @@ socket.on("extracted", async (data) => {
   inMatch = false;
   isInMatchmakingQueue = false;
   resetGameVisualState();
-  showMenu();
+  hideMenusForGame();
   setPlayButtonState(false);
   setMenuStatus(data?.message || "You extracted from the match.");
+  openPostMatchOverlay({
+    isDeath: false,
+    stake: Number(data?.stake || 0),
+    cashValue: Number(data?.kept || 0),
+    tax: Number(data?.tax || 0),
+    takeHome: Number(data?.payout || 0),
+    killedBy: "Nobody"
+  });
   await refreshMenuData();
 });
 
 socket.on("extractFailed", (data) => {
   state.extracting = false;
   setMenuStatus(data?.error || "Extraction failed.", true);
+});
+
+socket.on("spectateStatus", (data) => {
+  if (data?.error) {
+    if (postMatchSpectateStatus) postMatchSpectateStatus.textContent = data.error;
+    return;
+  }
+
+  state.spectating = true;
+  state.spectateTargetId = data?.targetId || null;
+  state.spectateTargetName = data?.targetName || "";
+  updateSpectateStatusText();
 });
 
 socket.on("friendNotification", async (payload) => {
