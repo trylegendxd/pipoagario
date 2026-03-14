@@ -713,6 +713,11 @@ canvas {
   text-shadow: 0 0 16px rgba(180, 0, 0, 0.3);
 }
 
+.postMatchTitle.isWin {
+  color: #15803d;
+  text-shadow: 0 0 20px rgba(21, 128, 61, 0.35);
+}
+
 .postMatchDetails {
   display: grid;
   gap: 8px;
