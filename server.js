@@ -687,6 +687,10 @@ async function mmLaunchMatch(stake) {
   const entries = q.splice(0, q.length); // take all queued players
   matchmakingQueue[stake] = [];
 
+  // Generate a unique match ID so checkMatchEnd can confirm this was a real multi-player match
+  const matchId = Math.random().toString(36).slice(2);
+  const matchSize = entries.length;
+
   for (const entry of entries) {
     const sock = io.sockets.sockets.get(entry.socketId);
     if (!sock) continue;
@@ -717,6 +721,9 @@ async function mmLaunchMatch(stake) {
       });
       player.cashValue = stake;
       player.stake = stake;
+      // Tag this player with the match they belong to
+      player.matchId = matchId;
+      player.matchSize = matchSize;
 
       players.set(sock.id, player);
       playerByUserId.set(entry.userId, sock.id);
@@ -744,7 +751,12 @@ async function checkMatchEnd() {
   // Only auto-extract if they have cash on the line (i.e. they're in a real match)
   if (!winner || Number(winner.cashValue || 0) <= 0) return;
 
-  console.log(`Match ended — last player: ${winner.name}`);
+  // Only fire if this player was part of a real multi-player match (matchSize >= 2).
+  // This prevents a race condition where checkMatchEnd triggers during the async
+  // mmLaunchMatch loop after the first player is added but before the second one is.
+  if (!winner.matchId || Number(winner.matchSize || 1) < 2) return;
+
+  console.log(`Match ended -- last player: ${winner.name}`);
   await completeExtraction(winner);
 }
 
@@ -2582,11 +2594,15 @@ async function tick() {
   // Auto-extract last standing human player (match winner)
   await checkMatchEnd();
 
+  // Snapshot AFTER checkMatchEnd so any player it already paid out is excluded.
+  // Guard with players.has() to prevent double payout if completeExtraction was
+  // already called for a player earlier in the same tick.
   const finishedExtractions = [...players.values()].filter(
     (p) => p.extracting && p.extractTicks >= EXTRACTION_HOLD_TICKS
   );
 
   for (const player of finishedExtractions) {
+    if (!players.has(player.id)) continue; // already extracted this tick
     await completeExtraction(player);
   }
 
