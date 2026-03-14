@@ -1632,15 +1632,29 @@ function playPrevTrack() {
 async function checkSession() {
   try {
     const data = await api("/api/me");
+
+    // If the server is unreachable, data.user will be undefined — treat as logged out
     updateAuthUi(data.user || null);
 
     if (data.user) {
-      await reconnectSocketAfterAuth();
-      await refreshMenuData();
+      // Socket connect and menu refresh are best-effort — a failure here must NOT
+      // overwrite the auth status with "Failed to check session."
+      try {
+        await reconnectSocketAfterAuth();
+      } catch (sockErr) {
+        console.error("SESSION CHECK SOCKET ERROR:", sockErr);
+        setMenuStatus("Live connection failed. Reload the page if needed.", true);
+      }
+
+      try {
+        await refreshMenuData();
+      } catch (menuErr) {
+        console.error("SESSION CHECK MENU REFRESH ERROR:", menuErr);
+      }
     }
   } catch (err) {
     console.error("SESSION CHECK ERROR:", err);
-    setAuthStatus("Failed to check session.", true);
+    setAuthStatus("Could not reach the server. Please reload.", true);
   }
 }
 
