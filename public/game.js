@@ -985,7 +985,7 @@ async function api(path, body = null, method = null) {
       method: useMethod,
       headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined,
-      credentials: "same-origin"
+      credentials: "include"
     });
   } catch (networkErr) {
     // Network failure (server unreachable, CORS, etc.)
