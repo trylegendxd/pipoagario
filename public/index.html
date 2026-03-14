@@ -274,60 +274,47 @@
     <div class="casinoOverlay hidden" id="rouletteOverlay">
       <div class="rouletteModal">
         <div class="rouletteModalHeader">
-          <div>
-            <div class="rouletteModalTitle">Roulette</div>
-            <div class="rouletteModalSub">Pick a number or choose red / black, then spin.</div>
+          <div class="rouletteHeaderLeft">
+            <div class="rouletteModalTitle">🎰 Roulette</div>
+            <div class="rouletteBalanceRow">Balance: <span class="rouletteBalanceValue" id="rouletteBalanceValue">$0.00</span></div>
           </div>
-          <button id="closeRouletteBtn" type="button" class="miniCardBtn">Close</button>
+          <div class="rouletteHeaderRight">
+            <div class="rouletteStakeRow">Stake: <span id="rouletteTotalStake">$0.00</span></div>
+            <button id="rouletteClearBtn" type="button" class="rouletteClearBtn">Clear</button>
+            <button id="rouletteSpinBtn" type="button" class="rouletteSpinBtn">SPIN</button>
+            <button id="closeRouletteBtn" type="button" class="miniCardBtn">✕</button>
+          </div>
+        </div>
+
+        <!-- Chip selector -->
+        <div class="rouletteChipBar">
+          <span class="rouletteChipBarLabel">Chip:</span>
+          <button type="button" class="rouletteChip chip-50 active" data-chip="0.5">50¢</button>
+          <button type="button" class="rouletteChip chip-1" data-chip="1">$1</button>
+          <button type="button" class="rouletteChip chip-2" data-chip="2">$2</button>
+          <button type="button" class="rouletteChip chip-5" data-chip="5">$5</button>
+          <span class="rouletteChipHint">Click a number to place · max $5 per number</span>
         </div>
 
         <div class="rouletteModalBody">
-          <div class="rouletteSidebar">
-            <div class="rouletteSideCard">
-              <div class="rouletteSideLabel">Current balance</div>
-              <div class="rouletteBalanceValue" id="rouletteBalanceValue">$0.00</div>
-            </div>
-
-            <div class="rouletteSideCard">
-              <div class="rouletteSideLabel">Bet amount</div>
-              <div class="rouletteAmountButtons" id="rouletteAmountButtons">
-                <button type="button" class="rouletteAmountBtn active" data-roulette-amount="1">$1</button>
-                <button type="button" class="rouletteAmountBtn" data-roulette-amount="2">$2</button>
-                <button type="button" class="rouletteAmountBtn" data-roulette-amount="3">$3</button>
-                <button type="button" class="rouletteAmountBtn" data-roulette-amount="4">$4</button>
-                <button type="button" class="rouletteAmountBtn" data-roulette-amount="5">$5</button>
-              </div>
-            </div>
-
-            <div class="rouletteSideCard">
-              <div class="rouletteSideLabel">Color bet</div>
-              <div class="rouletteColorButtons">
-                <button id="rouletteBetRedBtn" type="button" class="rouletteBetBtn redBet">Red 2x</button>
-                <button id="rouletteBetBlackBtn" type="button" class="rouletteBetBtn blackBet">Black 2x</button>
-              </div>
-            </div>
-
-            <div class="rouletteSideCard">
-              <div class="rouletteSideLabel">Number bet</div>
-              <div class="rouletteSelectedBet" id="rouletteSelectedBet">Beting on Red · $1</div>
-              <div class="rouletteNumberGrid" id="rouletteNumberGrid"></div>
-            </div>
-
-            <button id="rouletteSpinBtn" type="button" class="rouletteSpinBtn">SPIN</button>
-            <div class="rouletteStatus" id="rouletteStatus">Choose a bet and spin the wheel.</div>
+          <!-- Betting table -->
+          <div class="rouletteTableWrap">
+            <div class="rouletteTable" id="rouletteTable"></div>
           </div>
 
+          <!-- Wheel panel -->
           <div class="rouletteWheelPanel">
             <div class="rouletteWheelStage">
               <div class="rouletteArrow" aria-hidden="true"></div>
               <div class="rouletteWheelFrame">
-                <canvas id="rouletteWheelCanvas" width="700" height="700"></canvas>
+                <canvas id="rouletteWheelCanvas" width="560" height="560"></canvas>
               </div>
             </div>
-            <div class="rouletteResultCard">
-              <div class="rouletteResultLabel">Latest result</div>
+            <div class="rouletteResultCard" id="rouletteResultCard">
+              <div class="rouletteResultLabel">Last result</div>
               <div class="rouletteResultValue" id="rouletteResultValue">—</div>
             </div>
+            <div class="rouletteStatus" id="rouletteStatus">Place chips on the table, then spin.</div>
           </div>
         </div>
       </div>
