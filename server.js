@@ -40,7 +40,7 @@ const WORLD_RADIUS = WORLD_SIZE / 2;
 const FOOD_COUNT = 3000;
 const VIRUS_COUNT = 35;
 const BOT_COUNT = 8;
-const TICK_RATE = 45;
+const TICK_RATE = 60;
 const MAX_CELLS = 16;
 const SNAPSHOT_PADDING = 650;
 const MAX_CHAT_MESSAGES = 40;
@@ -48,10 +48,10 @@ const START_MASS = 30;
 const REGISTER_BONUS = 5;
 const BOT_FOOD_CAP = 200;
 
-const SPLIT_MERGE_DELAY_TICKS = 35 * TICK_RATE;
-const SPLIT_LAUNCH_SPEED = 34;
+const SPLIT_MERGE_DELAY_TICKS = 25 * TICK_RATE;
+const SPLIT_LAUNCH_SPEED = 40;
 const EJECT_LAUNCH_DISTANCE = 100;
-const EJECT_LAUNCH_SPEED = 26;
+const EJECT_LAUNCH_SPEED = 32;
 const TOUCH_SEPARATION_FACTOR = 1.0;
 const PREMERGE_ATTRACTION_FACTOR = 0.006;
 const POSTMERGE_ATTRACTION_FACTOR = 0.04;
@@ -87,6 +87,7 @@ const spectators = new Map();
 
 // True only while a real match is in progress (2+ players loaded in)
 let matchActive = false;
+let _tickLeaderboard = null; // cached leaderboard, rebuilt once per tick
 
 // matchmakingQueue[stake] = [ { userId, socketId, name, color } ]
 const matchmakingQueue = {};
@@ -729,6 +730,7 @@ async function mmLaunchMatch(stake) {
       player.cashValue = stake;
       player.stake = stake;
       player.matchId = matchId;
+      player._cachedWallet = wallet; // pre-seed so first snapshot skips DB fetch
 
       readyPlayers.push({ player, sock, wallet });
     } catch (err) {
@@ -1770,17 +1772,17 @@ function moveEntity(entity) {
   }
 
   for (const cell of entity.cells) {
-    const speed = 2.9 / Math.pow(cell.mass, 0.16);
+    const speed = 3.6 / Math.pow(cell.mass, 0.16);
     const len = Math.hypot(entity.mouse.x, entity.mouse.y) || 1;
     const dirX = entity.mouse.x / len;
     const dirY = entity.mouse.y / len;
-    const distFactor = Math.min(len / 220, 1);
+    const distFactor = Math.min(len / 180, 1);
 
     cell.vx += dirX * speed * distFactor;
     cell.vy += dirY * speed * distFactor;
 
-    cell.vx *= 0.89;
-    cell.vy *= 0.89;
+    cell.vx *= 0.84;
+    cell.vy *= 0.84;
 
     cell.x += cell.vx;
     cell.y += cell.vy;
@@ -2168,6 +2170,7 @@ async function completeExtraction(player, isMatchWin = false) {
       if (socket.request?.session?.user) {
         socket.request.session.user.credits = wallet;
       }
+      player._cachedWallet = wallet;
     }
 
     players.delete(player.id);
@@ -2334,7 +2337,7 @@ function buildLeaderboard() {
     .slice(0, 10);
 }
 
-async function buildSnapshotFor(targetPlayer) {
+function buildSnapshotFor(targetPlayer) {
   const center = entityCenter(targetPlayer);
   const total = totalMass(targetPlayer);
 
@@ -2400,17 +2403,13 @@ async function buildSnapshotFor(targetPlayer) {
 
   visiblePlayers.sort((a, b) => a.totalMass - b.totalMass);
 
-  const freshUser = await getUserById(targetPlayer.userId);
-
   return {
     worldSize: WORLD_SIZE,
     food: visibleFood,
     viruses: visibleViruses,
     players: visiblePlayers,
-    leaderboard: buildLeaderboard(),
-    wallet: freshUser?.credits ?? 0,
-    debugPlayerCount: players.size,
-    debugBotCount: bots.length
+    leaderboard: (_tickLeaderboard || (_tickLeaderboard = buildLeaderboard())),
+    wallet: targetPlayer._cachedWallet
   };
 }
 
@@ -2631,6 +2630,9 @@ async function tick() {
   // Nothing to simulate until a real match is running
   if (!matchActive) return;
 
+  // Precompute leaderboard once per tick — shared across all player snapshots
+  _tickLeaderboard = null; // cleared, rebuilt lazily on first buildSnapshotFor call
+
   respawnMissingBots();
 
   for (const bot of bots) {
@@ -2677,7 +2679,7 @@ async function tick() {
     if (!sock) continue;
 
     try {
-      const snapshot = await buildSnapshotFor(player);
+      const snapshot = buildSnapshotFor(player);
       sock.volatile.emit("state", snapshot);
     } catch (err) {
       console.error("SNAPSHOT ERROR:", err);
@@ -2697,7 +2699,7 @@ async function tick() {
     spectators.set(socketId, { targetId: target.id });
 
     try {
-      const snapshot = await buildSnapshotFor(target);
+      const snapshot = buildSnapshotFor(target);
       sock.volatile.emit("state", {
         ...snapshot,
         wallet: undefined,
