@@ -1730,3 +1730,33 @@ canvas {
     font-size: 24px;
   }
 }
+
+/* === Missing current UI states === */
+.secondaryButton {
+  background: #eef3ff;
+  color: #3459ff;
+  border: 1px solid #cfdbff;
+}
+
+.secondaryButton:hover {
+  filter: brightness(0.98);
+}
+
+.cancelQueueBtn {
+  background: linear-gradient(180deg, #ff8a8a, #ef4444) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(239, 68, 68, 0.28) !important;
+}
+
+.cancelQueueBtn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.cancelQueueBtn:disabled,
+.secondaryButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
