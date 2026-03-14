@@ -956,13 +956,15 @@ function waitForSocketConnect(timeoutMs = 5000) {
 
 async function reconnectSocketAfterAuth() {
   isIntentionalReconnect = true;
-
-  if (socket.connected) {
-    socket.disconnect();
+  try {
+    if (socket.connected) {
+      socket.disconnect();
+    }
+    await waitForSocketConnect();
+  } finally {
+    // Always reset even if connection fails — prevents permanent stuck state
+    isIntentionalReconnect = false;
   }
-
-  await waitForSocketConnect();
-  isIntentionalReconnect = false;
 }
 
 function escapeHtml(text) {
@@ -977,12 +979,18 @@ function escapeHtml(text) {
 async function api(path, body = null, method = null) {
   const useMethod = method || (body ? "POST" : "GET");
 
-  const res = await fetch(path, {
-    method: useMethod,
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "same-origin"
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method: useMethod,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "same-origin"
+    });
+  } catch (networkErr) {
+    // Network failure (server unreachable, CORS, etc.)
+    return { error: "Cannot reach the server. Please try again." };
+  }
 
   let data = {};
   try {
@@ -2530,7 +2538,7 @@ loginBtn?.addEventListener("click", async () => {
     }
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    setAuthStatus("Failed to log in.", true);
+    setAuthStatus(err?.message || "Failed to log in.", true);
   }
 });
 
