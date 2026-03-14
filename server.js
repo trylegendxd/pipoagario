@@ -74,6 +74,7 @@ const ALLOWED_PLAYER_COLORS = new Set([
 
 const ROULETTE_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
 const BLACKJACK_ALLOWED_BET_AMOUNTS = new Set([1, 2, 3, 4, 5]);
+const MATCHMAKING_COUNTDOWN_SECS = 10;
 const ROULETTE_RED_NUMBERS = new Set([
   1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
 ]);
@@ -82,6 +83,12 @@ const players = new Map();
 const playerByUserId = new Map();
 const socketsByUserId = new Map();
 const blackjackGames = new Map();
+
+// matchmakingQueue[stake] = [ { userId, socketId, name, color } ]
+const matchmakingQueue = {};
+for (const s of [1, 5, 10, 20]) matchmakingQueue[s] = [];
+// countdownTimers[stake] = { timer, startedAt }
+const countdownTimers = {};
 
 const food = [];
 const viruses = [];
@@ -610,6 +617,135 @@ function bjPublicState(game, hideDealer) {
   };
 }
 
+// ─── MATCHMAKING HELPERS ──────────────────────────────────────────────────────
+
+function mmQueueBroadcast(stake) {
+  const q = matchmakingQueue[stake] || [];
+  const cd = countdownTimers[stake];
+  const secsLeft = cd
+    ? Math.max(0, MATCHMAKING_COUNTDOWN_SECS - Math.floor((Date.now() - cd.startedAt) / 1000))
+    : null;
+
+  for (const entry of q) {
+    const sock = io.sockets.sockets.get(entry.socketId);
+    if (!sock) continue;
+    sock.emit("matchmakingUpdate", {
+      stake,
+      queueCount: q.length,
+      countdown: secsLeft,
+      players: q.map((e) => ({ name: e.name }))
+    });
+  }
+}
+
+function mmCancelCountdown(stake) {
+  const cd = countdownTimers[stake];
+  if (cd) {
+    clearInterval(cd.timer);
+    delete countdownTimers[stake];
+  }
+}
+
+function mmStartCountdown(stake) {
+  if (countdownTimers[stake]) return; // already running
+
+  const startedAt = Date.now();
+  countdownTimers[stake] = { startedAt, timer: null };
+
+  let secsLeft = MATCHMAKING_COUNTDOWN_SECS;
+  mmQueueBroadcast(stake);
+
+  const timer = setInterval(async () => {
+    secsLeft--;
+    countdownTimers[stake].startedAt = Date.now() - (MATCHMAKING_COUNTDOWN_SECS - secsLeft) * 1000;
+
+    if (matchmakingQueue[stake].length < 2) {
+      // Someone left — cancel
+      mmCancelCountdown(stake);
+      mmQueueBroadcast(stake);
+      return;
+    }
+
+    if (secsLeft <= 0) {
+      clearInterval(timer);
+      delete countdownTimers[stake];
+      await mmLaunchMatch(stake);
+      return;
+    }
+
+    mmQueueBroadcast(stake);
+  }, 1000);
+
+  countdownTimers[stake].timer = timer;
+}
+
+async function mmLaunchMatch(stake) {
+  const q = matchmakingQueue[stake] || [];
+  if (q.length < 2) return;
+
+  const entries = q.splice(0, q.length); // take all queued players
+  matchmakingQueue[stake] = [];
+
+  for (const entry of entries) {
+    const sock = io.sockets.sockets.get(entry.socketId);
+    if (!sock) continue;
+
+    try {
+      const freshUser = await getUserById(entry.userId);
+      if (!freshUser || Number(freshUser.credits || 0) < stake) {
+        sock.emit("matchmakingCancelled", { reason: "Insufficient balance." });
+        continue;
+      }
+
+      const wallet = await spendCreditsTx(
+        entry.userId, stake, "game_entry",
+        `Entered a match with $${stake.toFixed(2)}`
+      );
+
+      const req = sock.request;
+      if (req?.session?.user) {
+        req.session.user.credits = wallet;
+        req.session.gameEntryReady = false;
+        req.session.gameEntryStake = null;
+        req.session.save(() => {});
+      }
+
+      const player = createHumanPlayer(sock.id, { id: entry.userId, username: entry.username }, {
+        name: entry.name,
+        color: entry.color
+      });
+      player.cashValue = stake;
+
+      players.set(sock.id, player);
+      playerByUserId.set(entry.userId, sock.id);
+      socketsByUserId.set(entry.userId, sock.id);
+
+      sock.emit("matchmakingJoined", { wallet });
+      sock.emit("chatHistory", chatMessages);
+      sock.emit("joined", { ok: true, wallet });
+
+      addChatMessage("SERVER", `${player.name} joined the game`);
+    } catch (err) {
+      console.error("MM LAUNCH ERROR for", entry.name, err);
+      const sock2 = io.sockets.sockets.get(entry.socketId);
+      sock2?.emit("matchmakingCancelled", { reason: "Failed to enter match." });
+    }
+  }
+}
+
+// Check if only 1 human player remains in an active match and auto-extract them
+async function checkMatchEnd() {
+  const humanPlayers = [...players.values()];
+  if (humanPlayers.length !== 1) return;
+
+  const winner = humanPlayers[0];
+  // Only auto-extract if they have cash on the line (i.e. they're in a real match)
+  if (!winner || Number(winner.cashValue || 0) <= 0) return;
+
+  console.log(`Match ended — last player: ${winner.name}`);
+  await completeExtraction(winner);
+}
+
 async function requireAuth(req, res, next) {
   try {
     const user = await getSessionUser(req);
@@ -875,6 +1011,7 @@ app.post("/api/casino/roulette/spin", requireAuth, async (req, res) => {
   }
 });
 
+
 // ─── BLACKJACK ROUTES ─────────────────────────────────────────────────────────
 
 app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
@@ -887,16 +1024,11 @@ app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
     if (existing && existing.status === "playing") {
       return res.status(400).json({ error: "Finish your current hand first." });
     }
-    const wallet = await spendCreditsTx(
-      req.user.id, amount, "blackjack_bet", `Blackjack bet $${amount}`
-    );
+    const wallet = await spendCreditsTx(req.user.id, amount, "blackjack_bet", `Blackjack bet $${amount}`);
     const deck = bjCreateDeck();
     const playerHand = [deck.pop(), deck.pop()];
     const dealerHand = [deck.pop(), deck.pop()];
-    const game = {
-      userId: req.user.id, bet: amount, deck,
-      playerHand, dealerHand, status: "playing", wallet, payout: 0
-    };
+    const game = { userId: req.user.id, bet: amount, deck, playerHand, dealerHand, status: "playing", wallet, payout: 0 };
 
     if (bjIsBlackjack(playerHand)) {
       if (bjIsBlackjack(dealerHand)) {
@@ -922,16 +1054,11 @@ app.post("/api/casino/blackjack/start", requireAuth, async (req, res) => {
 app.post("/api/casino/blackjack/hit", requireAuth, async (req, res) => {
   try {
     const game = blackjackGames.get(req.user.id);
-    if (!game || game.status !== "playing") {
-      return res.status(400).json({ error: "No active game." });
-    }
+    if (!game || game.status !== "playing") return res.status(400).json({ error: "No active game." });
     game.playerHand.push(game.deck.pop());
     const pv = bjHandValue(game.playerHand);
-    if (pv > 21) {
-      game.status = "player_bust"; game.payout = 0;
-    } else if (pv === 21) {
-      await bjResolve(game);
-    }
+    if (pv > 21) { game.status = "player_bust"; game.payout = 0; }
+    else if (pv === 21) { await bjResolve(game); }
     req.session.user.credits = game.wallet;
     res.json({ ok: true, ...bjPublicState(game, game.status === "playing") });
   } catch (err) {
@@ -943,9 +1070,7 @@ app.post("/api/casino/blackjack/hit", requireAuth, async (req, res) => {
 app.post("/api/casino/blackjack/stand", requireAuth, async (req, res) => {
   try {
     const game = blackjackGames.get(req.user.id);
-    if (!game || game.status !== "playing") {
-      return res.status(400).json({ error: "No active game." });
-    }
+    if (!game || game.status !== "playing") return res.status(400).json({ error: "No active game." });
     await bjResolve(game);
     req.session.user.credits = game.wallet;
     res.json({ ok: true, ...bjPublicState(game, false) });
@@ -958,38 +1083,24 @@ app.post("/api/casino/blackjack/stand", requireAuth, async (req, res) => {
 app.post("/api/casino/blackjack/double", requireAuth, async (req, res) => {
   try {
     const game = blackjackGames.get(req.user.id);
-    if (!game || game.status !== "playing") {
-      return res.status(400).json({ error: "No active game." });
-    }
-    if (game.playerHand.length !== 2) {
-      return res.status(400).json({ error: "Can only double on the first two cards." });
-    }
+    if (!game || game.status !== "playing") return res.status(400).json({ error: "No active game." });
+    if (game.playerHand.length !== 2) return res.status(400).json({ error: "Can only double on the first two cards." });
     const freshUser = await getUserById(req.user.id);
-    if (Number(freshUser?.credits || 0) < game.bet) {
-      return res.status(400).json({ error: "Not enough balance to double down." });
-    }
-    game.wallet = await spendCreditsTx(
-      req.user.id, game.bet, "blackjack_double", `Blackjack double down $${game.bet}`
-    );
-    game.bet = game.bet * 2;
+    if (Number(freshUser?.credits || 0) < game.bet) return res.status(400).json({ error: "Not enough balance to double down." });
+    game.wallet = await spendCreditsTx(req.user.id, game.bet, "blackjack_double", `Blackjack double down $${game.bet}`);
+    game.bet *= 2;
     game.playerHand.push(game.deck.pop());
     const pv = bjHandValue(game.playerHand);
-    if (pv > 21) {
-      game.status = "player_bust"; game.payout = 0;
-    } else {
-      await bjResolve(game);
-    }
+    if (pv > 21) { game.status = "player_bust"; game.payout = 0; }
+    else { await bjResolve(game); }
     req.session.user.credits = game.wallet;
     res.json({ ok: true, ...bjPublicState(game, false) });
   } catch (err) {
-    if (err?.code === "INSUFFICIENT_CREDITS") {
-      return res.status(400).json({ error: "Not enough balance to double down." });
-    }
+    if (err?.code === "INSUFFICIENT_CREDITS") return res.status(400).json({ error: "Not enough balance to double down." });
     console.error("BLACKJACK DOUBLE ERROR:", err);
     res.status(500).json({ error: "Failed to process double." });
   }
 });
-
 
 app.get("/api/leaderboard/wallet", async (req, res) => {
   try {
@@ -1374,11 +1485,7 @@ app.get("/api/private-messages/:username", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "User not found." });
     }
 
-    const friends = await areFriends(req.user.id, target.id);
-    if (!friends) {
-      return res.status(403).json({ error: "You can only message friends." });
-    }
-
+    // Allow reading history regardless of friend status (history persists after unfriend)
     const { rows } = await pool.query(
       `
       SELECT pm.id, pm.from_user_id, pm.to_user_id, pm.message, pm.created_at,
@@ -1482,6 +1589,7 @@ app.post("/api/game/enter", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Invalid amount selected." });
     }
 
+    // Already in active game
     const existingSocketId = playerByUserId.get(req.user.id);
     if (existingSocketId && players.has(existingSocketId)) {
       return res.json({
@@ -1497,6 +1605,7 @@ app.post("/api/game/enter", requireAuth, async (req, res) => {
       });
     }
 
+    // Store on session so socket "join" event can use it after matchmaking
     req.session.gameEntryReady = true;
     req.session.gameEntryStake = requestedStake;
 
@@ -1509,13 +1618,30 @@ app.post("/api/game/enter", requireAuth, async (req, res) => {
       res.json({
         ok: true,
         wallet: Number(freshUser.credits || 0),
-        cost: requestedStake
+        cost: requestedStake,
+        matchmaking: true
       });
     });
   } catch (err) {
     console.error("GAME ENTER ERROR:", err);
     res.status(500).json({ error: "Failed to enter the game." });
   }
+});
+
+app.post("/api/game/cancel", requireAuth, (req, res) => {
+  const userId = Number(req.user.id);
+  for (const stake of ALLOWED_STAKES) {
+    const q = matchmakingQueue[stake];
+    const idx = q.findIndex((e) => e.userId === userId);
+    if (idx !== -1) {
+      q.splice(idx, 1);
+      // Cancel countdown if < 2 players left
+      if (q.length < 2) mmCancelCountdown(stake);
+      mmQueueBroadcast(stake);
+      break;
+    }
+  }
+  res.json({ ok: true });
 });
 
 app.get("/debug/players", (req, res) => {
@@ -2066,46 +2192,38 @@ function handleEntityVsEntity() {
           const d = distance(ac.x, ac.y, bc.x, bc.y);
 
           if (ac.mass > bc.mass * 1.12 && d < ar - br * 0.3) {
-            // Transfer proportional cash value for this cell
             const bTotalMass = b.cells.reduce((s, c) => s + c.mass, 0);
-            const cellValueShare = bTotalMass > 0
-              ? (bc.mass / bTotalMass) * Number(b.cashValue || 0)
-              : 0;
-            if (cellValueShare > 0) {
-              a.cashValue = Number(a.cashValue || 0) + cellValueShare;
-              b.cashValue = Math.max(0, Number(b.cashValue || 0) - cellValueShare);
+            const cellShare = bTotalMass > 0
+              ? (bc.mass / bTotalMass) * Number(b.cashValue || 0) : 0;
+            if (cellShare > 0) {
+              a.cashValue = Number(a.cashValue || 0) + cellShare;
+              b.cashValue = Math.max(0, Number(b.cashValue || 0) - cellShare);
             }
 
             ac.mass += bc.mass;
             b.cells.splice(bi, 1);
 
             if (b.cells.length === 0) {
-              // Sweep any remaining rounding dust
               a.cashValue = Number(a.cashValue || 0) + Number(b.cashValue || 0);
               b.cashValue = 0;
-
               if (isHuman(b)) eliminateHuman(b, a.name);
               else if (isBot(b)) eliminateBot(b.botIndex);
             }
           } else if (bc.mass > ac.mass * 1.12 && d < br - ar * 0.3) {
-            // Transfer proportional cash value for this cell
             const aTotalMass = a.cells.reduce((s, c) => s + c.mass, 0);
-            const cellValueShare = aTotalMass > 0
-              ? (ac.mass / aTotalMass) * Number(a.cashValue || 0)
-              : 0;
-            if (cellValueShare > 0) {
-              b.cashValue = Number(b.cashValue || 0) + cellValueShare;
-              a.cashValue = Math.max(0, Number(a.cashValue || 0) - cellValueShare);
+            const cellShare = aTotalMass > 0
+              ? (ac.mass / aTotalMass) * Number(a.cashValue || 0) : 0;
+            if (cellShare > 0) {
+              b.cashValue = Number(b.cashValue || 0) + cellShare;
+              a.cashValue = Math.max(0, Number(a.cashValue || 0) - cellShare);
             }
 
             bc.mass += ac.mass;
             a.cells.splice(ai, 1);
 
             if (a.cells.length === 0) {
-              // Sweep any remaining rounding dust
               b.cashValue = Number(b.cashValue || 0) + Number(a.cashValue || 0);
               a.cashValue = 0;
-
               if (isHuman(a)) eliminateHuman(a, b.name);
               else if (isBot(a)) eliminateBot(a.botIndex);
             }
@@ -2260,80 +2378,39 @@ io.on("connection", (socket) => {
         return;
       }
 
-      const wallet = await spendCreditsTx(
-        freshUser.id,
-        stake,
-        "game_entry",
-        `Entered a match with $${stake.toFixed(2)}`
-      );
-
-      req.session.user = {
-        id: freshUser.id,
-        username: freshUser.username,
-        credits: wallet
-      };
-      req.session.gameEntryReady = false;
-      req.session.gameEntryStake = null;
-
-      req.session.save(async (saveErr) => {
-        if (saveErr) {
-          console.error("SESSION SAVE ERROR AFTER JOIN:", saveErr);
-
-          try {
-            const refundedWallet = await addCreditsTx(
-              freshUser.id,
-              stake,
-              "game_entry_refund",
-              "Refund after failed join save"
-            );
-
-            req.session.user = {
-              id: freshUser.id,
-              username: freshUser.username,
-              credits: refundedWallet
-            };
-
-            req.session.save(() => {});
-          } catch (refundErr) {
-            console.error("REFUND ERROR:", refundErr);
-          }
-
-          socket.emit("joinError", { error: "Failed to save session." });
-          return;
-        }
-
-        const player = createHumanPlayer(
-          socket.id,
-          {
-            id: freshUser.id,
-            username: freshUser.username
-          },
-          payload
-        );
-
-        player.cashValue = stake;
-
-        players.set(socket.id, player);
-        playerByUserId.set(freshUser.id, socket.id);
-        socketsByUserId.set(freshUser.id, socket.id);
-
-        socket.emit("chatHistory", chatMessages);
-        socket.emit("joined", {
-          ok: true,
-          wallet
-        });
-
-        addChatMessage("SERVER", `${player.name} joined the game`);
-      });
-    } catch (err) {
-      console.error("JOIN ERROR:", err);
-
-      if (err.code === "INSUFFICIENT_CREDITS") {
-        socket.emit("joinError", { error: "Not enough balance to play." });
-        return;
+      // Remove any existing queue entry for this user
+      for (const s of ALLOWED_STAKES) {
+        const q = matchmakingQueue[s];
+        const idx = q.findIndex((e) => e.userId === freshUser.id);
+        if (idx !== -1) q.splice(idx, 1);
       }
 
-      socket.emit("joinError", { error: "Failed to join the match." });
+      const requestedName = typeof payload === "object" ? payload?.name : payload;
+      const requestedColor = typeof payload === "object" ? payload?.color : null;
+      const safeName = String(requestedName || freshUser.username || "Player").trim().slice(0, 16) || "Player";
+
+      matchmakingQueue[stake].push({
+        userId: freshUser.id,
+        username: freshUser.username,
+        socketId: socket.id,
+        name: safeName,
+        color: requestedColor
+      });
+
+      socket.emit("matchmakingQueued", {
+        stake,
+        queueCount: matchmakingQueue[stake].length,
+        players: matchmakingQueue[stake].map((e) => ({ name: e.name }))
+      });
+
+      mmQueueBroadcast(stake);
+
+      if (matchmakingQueue[stake].length >= 2) {
+        mmStartCountdown(stake);
+      }
+    } catch (err) {
+      console.error("JOIN ERROR:", err);
+      socket.emit("joinError", { error: "Failed to join the queue." });
     }
   });
 
@@ -2354,7 +2431,33 @@ io.on("connection", (socket) => {
     if (typeof input?.extracting === "boolean") player.wantsExtract = input.extracting;
   });
 
+  socket.on("cancelQueue", () => {
+    for (const stake of ALLOWED_STAKES) {
+      const q = matchmakingQueue[stake];
+      const idx = q.findIndex((e) => e.socketId === socket.id);
+      if (idx !== -1) {
+        q.splice(idx, 1);
+        if (q.length < 2) mmCancelCountdown(stake);
+        mmQueueBroadcast(stake);
+        socket.emit("matchmakingCancelled", { reason: "You cancelled." });
+        break;
+      }
+    }
+  });
+
   socket.on("disconnect", () => {
+    // Remove from matchmaking queue
+    for (const stake of ALLOWED_STAKES) {
+      const q = matchmakingQueue[stake];
+      const idx = q.findIndex((e) => e.socketId === socket.id);
+      if (idx !== -1) {
+        q.splice(idx, 1);
+        if (q.length < 2) mmCancelCountdown(stake);
+        mmQueueBroadcast(stake);
+        break;
+      }
+    }
+
     const player = players.get(socket.id);
 
     if (player) {
@@ -2399,6 +2502,9 @@ async function tick() {
   }
 
   handleEntityVsEntity();
+
+  // Auto-extract last standing human player (match winner)
+  await checkMatchEnd();
 
   const finishedExtractions = [...players.values()].filter(
     (p) => p.extracting && p.extractTicks >= EXTRACTION_HOLD_TICKS
