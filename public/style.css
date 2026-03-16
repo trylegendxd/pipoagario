@@ -3,12 +3,12 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: Ubuntu, Arial, sans-serif;
-  background: #ffffff;
+  font-family: 'Courier New', Courier, monospace;
+  background: #050a05;
 }
 
 body {
-  color: #24364d;
+  color: #00ff41;
 }
 
 .hidden {
@@ -30,8 +30,7 @@ canvas {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top, #f8fbff 0%, #eef4fb 55%, #e6eef8 100%);
+  background: #050a05;
 }
 
 .menuShell {
@@ -52,10 +51,10 @@ canvas {
 }
 
 .menuCard {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #d9e4f2;
-  border-radius: 22px;
-  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.12);
+  background: rgba(0, 10, 0, 0.88);
+  border: 1px solid #00ff41;
+  border-radius: 8px;
+  box-shadow: 0 0 18px rgba(0, 255, 65, 0.18), inset 0 0 30px rgba(0,255,65,0.03);
   backdrop-filter: blur(8px);
 }
 
@@ -66,28 +65,41 @@ canvas {
   padding: 18px 20px 12px;
   font-size: 15px;
   font-weight: 800;
-  color: #24364d;
+  color: #00ff41;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .liveBadge {
   padding: 5px 10px;
-  border-radius: 999px;
-  background: #e6fff1;
-  color: #0a9c4a;
+  border-radius: 4px;
+  background: rgba(0, 255, 65, 0.1);
+  color: #00ff41;
   font-size: 12px;
   font-weight: 800;
-  border: 1px solid #bcebcf;
+  border: 1px solid #00ff41;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .miniCardBtn {
   padding: 7px 12px;
-  border: 1px solid #cfdbff;
-  border-radius: 999px;
-  background: #eef3ff;
-  color: #3459ff;
+  border: 1px solid #00ff41;
+  border-radius: 4px;
+  background: rgba(0, 255, 65, 0.08);
+  color: #00ff41;
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.miniCardBtn:hover {
+  background: rgba(0, 255, 65, 0.18);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
 }
 
 .mainPlayCard {
@@ -101,17 +113,19 @@ canvas {
   font-size: 58px;
   line-height: 1;
   font-weight: 900;
-  letter-spacing: 2px;
-  background: linear-gradient(180deg, #4db2ff, #0f69da);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: 4px;
+  color: #00ff41;
+  text-shadow: 0 0 20px rgba(0, 255, 65, 0.7), 0 0 40px rgba(0, 255, 65, 0.3);
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: unset;
+  background: none;
 }
 
 .mainPlayCard p,
 .landingPanel p {
   margin: 0 0 16px;
   font-size: 15px;
-  color: #607289;
+  color: #4dbb6a;
 }
 
 .mainPlayCard input,
@@ -122,13 +136,22 @@ canvas {
   width: 100%;
   box-sizing: border-box;
   padding: 13px 14px;
-  border-radius: 14px;
-  border: 1px solid #d6e1ef;
-  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #00cc33;
+  background: rgba(0, 20, 0, 0.8);
+  color: #00ff41;
   font-size: 15px;
   outline: none;
   margin-top: 12px;
-  font-family: inherit;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.mainPlayCard input::placeholder,
+.walletCard input::placeholder,
+.authPanel input::placeholder,
+.friendSearchPanel input::placeholder,
+.privateChatInputRow input::placeholder {
+  color: #2d6e3e;
 }
 
 .mainPlayCard input:focus,
@@ -136,8 +159,8 @@ canvas {
 .authPanel input:focus,
 .friendSearchPanel input:focus,
 .privateChatInputRow input:focus {
-  border-color: #8fb8ea;
-  box-shadow: 0 0 0 4px rgba(77, 178, 255, 0.12);
+  border-color: #00ff41;
+  box-shadow: 0 0 0 3px rgba(0, 255, 65, 0.18);
 }
 
 .stakeSection {
@@ -147,9 +170,11 @@ canvas {
 
 .stakeTitle {
   margin-bottom: 10px;
-  color: #465a72;
+  color: #4dbb6a;
   font-size: 14px;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .stakeButtons {
@@ -160,26 +185,28 @@ canvas {
 
 .stakeBtn {
   padding: 13px 10px;
-  border-radius: 14px;
-  border: 2px solid #d8e4f1;
-  background: #ffffff;
-  color: #1f3550;
+  border-radius: 6px;
+  border: 1px solid #00cc33;
+  background: rgba(0, 20, 0, 0.7);
+  color: #00ff41;
   font-size: 18px;
   font-weight: 900;
   cursor: pointer;
   transition: 0.18s ease;
+  font-family: 'Courier New', Courier, monospace;
 }
 
 .stakeBtn:hover {
   transform: translateY(-1px);
-  border-color: #b8cde6;
+  background: rgba(0, 255, 65, 0.12);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.25);
 }
 
 .stakeBtn.active {
-  background: linear-gradient(180deg, #ffd85c, #ffbe1f);
-  border-color: #efb100;
-  color: #1f1600;
-  box-shadow: 0 8px 18px rgba(255, 191, 29, 0.26);
+  background: rgba(0, 255, 65, 0.2);
+  border-color: #00ff41;
+  color: #00ff41;
+  box-shadow: 0 0 14px rgba(0, 255, 65, 0.4), inset 0 0 10px rgba(0, 255, 65, 0.1);
 }
 
 .mainJoinBtn,
@@ -192,12 +219,15 @@ canvas {
 #sendPrivateChatBtn {
   width: 100%;
   padding: 15px 16px;
-  border-radius: 16px;
-  border: 0;
+  border-radius: 6px;
+  border: 1px solid #00ff41;
   font-size: 17px;
   font-weight: 900;
   cursor: pointer;
-  font-family: inherit;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: all 0.18s ease;
 }
 
 .mainJoinBtn,
@@ -205,9 +235,19 @@ canvas {
 #registerBtn,
 #loginBtn,
 #logoutBtn {
-  background: linear-gradient(180deg, #ffd85c, #ffb400);
-  color: #101010;
-  box-shadow: 0 10px 24px rgba(255, 183, 0, 0.24);
+  background: rgba(0, 255, 65, 0.12);
+  color: #00ff41;
+  box-shadow: 0 0 16px rgba(0, 255, 65, 0.2);
+}
+
+.mainJoinBtn:hover,
+#startMenuBtn:hover,
+#registerBtn:hover,
+#loginBtn:hover,
+#logoutBtn:hover {
+  background: rgba(0, 255, 65, 0.22);
+  box-shadow: 0 0 24px rgba(0, 255, 65, 0.4);
+  transform: translateY(-1px);
 }
 
 .mainJoinBtn {
@@ -215,15 +255,25 @@ canvas {
 }
 
 #addBalanceBtn {
-  background: #e8fff1;
-  color: #06984a;
-  border: 1px solid #bcebcf;
+  background: rgba(0, 255, 65, 0.08);
+  color: #00ff41;
+  border: 1px solid #00cc33;
+}
+
+#addBalanceBtn:hover {
+  background: rgba(0, 255, 65, 0.18);
+  box-shadow: 0 0 12px rgba(0, 255, 65, 0.3);
 }
 
 #withdrawBtn {
-  background: #eef3ff;
-  color: #3459ff;
-  border: 1px solid #cfdbff;
+  background: rgba(0, 180, 50, 0.08);
+  color: #4dbb6a;
+  border: 1px solid #2d7a44;
+}
+
+#withdrawBtn:hover {
+  background: rgba(0, 180, 50, 0.16);
+  box-shadow: 0 0 10px rgba(0, 200, 60, 0.25);
 }
 
 .walletCard {
@@ -236,7 +286,8 @@ canvas {
   font-size: 48px;
   line-height: 1;
   font-weight: 900;
-  color: #17a34a;
+  color: #00ff41;
+  text-shadow: 0 0 12px rgba(0, 255, 65, 0.4);
 }
 
 .walletButtons {
@@ -254,7 +305,7 @@ canvas {
 .friendsStatus {
   margin-top: 12px;
   text-align: center;
-  color: #687b92;
+  color: #2d7a44;
   font-size: 13px;
 }
 
@@ -271,7 +322,7 @@ canvas {
 
 .leaderboardEntries {
   padding: 0 20px 18px;
-  color: #24364d;
+  color: #00ff41;
   font-size: 15px;
 }
 
@@ -292,8 +343,9 @@ canvas {
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 800;
-  color: #5f7289;
+  color: #2d9e52;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .friendsList,
@@ -316,15 +368,15 @@ canvas {
   justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #dce6f2;
-  border-radius: 14px;
-  background: #f9fbff;
+  border: 1px solid #1a5c2a;
+  border-radius: 6px;
+  background: rgba(0, 20, 0, 0.6);
 }
 
 .friendName {
   font-size: 14px;
   font-weight: 700;
-  color: #24364d;
+  color: #00ff41;
 }
 
 .friendActions {
@@ -349,14 +401,16 @@ canvas {
 .friendBtnAdd,
 .friendBtnAccept,
 .friendBtnChat {
-  background: #e8fff1;
-  color: #07954b;
+  background: rgba(0, 255, 65, 0.1);
+  color: #00ff41;
+  border: 1px solid #00cc33;
 }
 
 .friendBtnDeny,
 .friendBtnRemove {
-  background: #fff0f0;
-  color: #cc2c2c;
+  background: rgba(255, 50, 50, 0.1);
+  color: #ff4444;
+  border: 1px solid #cc2222;
 }
 
 .casinoCard {
@@ -368,7 +422,7 @@ canvas {
 }
 
 .casinoIntro {
-  color: #5f7289;
+  color: #2d9e52;
   font-size: 13px;
   line-height: 1.45;
   margin-bottom: 12px;
@@ -381,21 +435,30 @@ canvas {
 }
 
 .casinoBtn {
-  border: 1px solid #d7e3ef;
-  border-radius: 14px;
+  border: 1px solid #00cc33;
+  border-radius: 6px;
   padding: 14px 10px;
-  background: linear-gradient(180deg, #f8fbff, #eef5fd);
-  color: #7f90a4;
+  background: rgba(0, 30, 0, 0.7);
+  color: #00ff41;
   font-size: 14px;
   font-weight: 800;
-  cursor: not-allowed;
+  cursor: pointer;
   opacity: 0.9;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.18s ease;
+}
+
+.casinoBtn:hover {
+  background: rgba(0, 255, 65, 0.15);
+  box-shadow: 0 0 12px rgba(0, 255, 65, 0.3);
 }
 
 .casinoSoonBadge {
-  background: #fff7de;
-  color: #b68300;
-  border-color: #f1df9f;
+  background: rgba(255, 200, 0, 0.1);
+  color: #ffcc00;
+  border-color: #998000;
 }
 
 .customizeBody {
@@ -409,13 +472,13 @@ canvas {
   gap: 12px;
   margin-top: 4px;
   padding: 12px 14px;
-  border: 1px solid #d6e1ef;
-  border-radius: 14px;
-  background: #fff;
+  border: 1px solid #1a5c2a;
+  border-radius: 6px;
+  background: rgba(0, 20, 0, 0.6);
 }
 
 .colorRow label {
-  color: #33455d;
+  color: #00ff41;
   font-size: 15px;
   font-weight: 700;
 }
@@ -469,7 +532,7 @@ canvas {
 .colorPreviewName {
   font-size: 13px;
   font-weight: 700;
-  color: #607289;
+  color: #4dbb6a;
 }
 
 .colorPreviewWrap {
@@ -478,15 +541,15 @@ canvas {
   align-items: center;
   justify-content: space-between;
   padding: 14px;
-  border-radius: 16px;
-  background: #f7fbff;
-  border: 1px solid #dce7f3;
+  border-radius: 6px;
+  background: rgba(0, 20, 0, 0.6);
+  border: 1px solid #1a5c2a;
 }
 
 .colorPreviewLabel {
   font-size: 14px;
   font-weight: 800;
-  color: #4c6179;
+  color: #2d9e52;
 }
 
 .colorPreviewBall {
@@ -522,14 +585,16 @@ canvas {
 
 .privateMsg.me {
   align-self: flex-end;
-  background: #e8fff1;
-  color: #0a7f43;
+  background: rgba(0, 255, 65, 0.1);
+  color: #00ff41;
+  border: 1px solid #00cc33;
 }
 
 .privateMsg.them {
   align-self: flex-start;
-  background: #eef3ff;
-  color: #2742a5;
+  background: rgba(0, 100, 30, 0.2);
+  color: #4dbb6a;
+  border: 1px solid #1a5c2a;
 }
 
 .privateChatInputRow {
@@ -542,9 +607,10 @@ canvas {
 #sendPrivateChatBtn {
   width: auto;
   padding: 12px 16px;
-  border-radius: 12px;
-  background: #e8fff1;
-  color: #07954b;
+  border-radius: 6px;
+  background: rgba(0, 255, 65, 0.1);
+  color: #00ff41;
+  border: 1px solid #00cc33;
   font-weight: 800;
 }
 
@@ -558,9 +624,11 @@ canvas {
 .bgBall {
   position: absolute;
   border-radius: 50%;
-  opacity: 0.22;
+  opacity: 0.18;
   animation: floatBall linear infinite;
-  filter: blur(0.2px);
+  filter: blur(0.5px);
+  background: radial-gradient(circle, #00ff41, #004d14) !important;
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
 }
 
 @keyframes floatBall {
@@ -591,26 +659,28 @@ canvas {
   left: 16px;
   bottom: 16px;
   min-width: 88px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #d5dfea;
-  border-radius: 16px;
+  background: rgba(0, 10, 0, 0.88);
+  border: 1px solid #00cc33;
+  border-radius: 8px;
   padding: 10px 12px 8px;
-  box-shadow: 0 8px 24px rgba(59, 92, 141, 0.12);
+  box-shadow: 0 0 14px rgba(0, 255, 65, 0.15);
 }
 
 .massLabel {
   font-size: 11px;
-  color: #7a8da3;
+  color: #2d9e52;
   text-transform: uppercase;
   margin-bottom: 3px;
   font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .massValue {
   font-size: 38px;
   line-height: 1;
   font-weight: 900;
-  color: #31455f;
+  color: #00ff41;
+  text-shadow: 0 0 10px rgba(0,255,65,0.4);
 }
 
 .gameLeaderboard {
@@ -618,21 +688,24 @@ canvas {
   top: 16px;
   right: 16px;
   width: 250px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #d3dbe6;
-  border-radius: 16px;
+  background: rgba(0, 10, 0, 0.92);
+  border: 1px solid #00cc33;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 10px 24px rgba(59, 92, 141, 0.12);
+  box-shadow: 0 0 16px rgba(0, 255, 65, 0.15);
 }
 
 .leaderboardTitle {
-  background: #f4f8fd;
-  border-bottom: 1px solid #dde6f0;
+  background: rgba(0, 30, 0, 0.8);
+  border-bottom: 1px solid #00cc33;
   padding: 10px 12px;
   font-size: 24px;
   font-weight: 900;
-  color: #4b5f78;
+  color: #00ff41;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(0,255,65,0.4);
 }
 
 .chatBox {
@@ -640,10 +713,10 @@ canvas {
   left: 16px;
   bottom: 90px;
   width: 320px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #d5dfea;
-  border-radius: 16px;
-  box-shadow: 0 10px 28px rgba(59, 92, 141, 0.14);
+  background: rgba(0, 10, 0, 0.94);
+  border: 1px solid #00cc33;
+  border-radius: 8px;
+  box-shadow: 0 0 16px rgba(0, 255, 65, 0.15);
   overflow: hidden;
   display: none;
   z-index: 30;
@@ -654,8 +727,8 @@ canvas {
   overflow-y: auto;
   padding: 10px;
   font-size: 13px;
-  color: #333;
-  background: rgba(250, 250, 250, 0.96);
+  color: #00ff41;
+  background: rgba(0, 5, 0, 0.9);
 }
 
 .chatMessage {
@@ -666,7 +739,7 @@ canvas {
 
 .chatName {
   font-weight: 700;
-  color: #2f7edb;
+  color: #4dff80;
   margin-right: 6px;
 }
 
@@ -674,12 +747,17 @@ canvas {
   width: 100%;
   box-sizing: border-box;
   border: 0;
-  border-top: 1px solid #dde6f0;
+  border-top: 1px solid #00cc33;
   padding: 10px 12px;
   font-size: 14px;
   outline: none;
-  background: #fff;
-  font-family: inherit;
+  background: rgba(0, 15, 0, 0.95);
+  color: #00ff41;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.chatInput::placeholder {
+  color: #2d6e3e;
 }
 
 
@@ -701,10 +779,10 @@ canvas {
 
 .postMatchCard {
   width: min(460px, calc(100vw - 28px));
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid #d8e3f2;
-  border-radius: 20px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  background: rgba(0, 10, 0, 0.97);
+  border: 1px solid #00ff41;
+  border-radius: 8px;
+  box-shadow: 0 0 40px rgba(0, 255, 65, 0.2);
   padding: 24px 22px;
   animation: cardPopIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
@@ -717,34 +795,38 @@ canvas {
 .postMatchTitle {
   margin: 0 0 12px;
   font-size: 34px;
-  color: #1f3652;
+  color: #00ff41;
+  text-shadow: 0 0 14px rgba(0,255,65,0.4);
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .postMatchTitle.isDeath {
-  color: #8b0000;
-  text-shadow: 0 0 16px rgba(180, 0, 0, 0.3);
+  color: #ff4444;
+  text-shadow: 0 0 16px rgba(255, 0, 0, 0.4);
 }
 
 .postMatchTitle.isWin {
-  color: #b45309;
-  text-shadow: 0 0 22px rgba(251, 191, 36, 0.55);
+  color: #00ff41;
+  text-shadow: 0 0 22px rgba(0, 255, 65, 0.7);
   letter-spacing: 1px;
 }
 
 .postMatchDetails {
   display: grid;
   gap: 8px;
-  color: #31455f;
+  color: #4dbb6a;
   font-size: 15px;
 }
 
 .postMatchSpectateStatus {
   margin-top: 14px;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: #f2f7ff;
-  color: #37506e;
+  border-radius: 6px;
+  background: rgba(0, 30, 0, 0.6);
+  color: #2d9e52;
   font-size: 14px;
+  border: 1px solid #1a5c2a;
 }
 
 .postMatchActions {
@@ -757,22 +839,30 @@ canvas {
 .postMatchActions button {
   width: 100%;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: none;
+  border-radius: 6px;
+  border: 1px solid #00cc33;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 #postMatchSpectateBtn {
-  background: linear-gradient(180deg, #75b9ff, #3f92ea);
-  color: #fff;
+  background: rgba(0, 255, 65, 0.12);
+  color: #00ff41;
+}
+
+#postMatchSpectateBtn:hover {
+  background: rgba(0, 255, 65, 0.22);
+  box-shadow: 0 0 12px rgba(0,255,65,0.3);
 }
 
 .postMatchHint {
   margin-top: 12px;
   font-size: 12px;
-  color: #667d98;
+  color: #2d7a44;
   text-align: center;
 }
 
@@ -782,7 +872,7 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at center, #f7fbff, #e8f1fb);
+  background: #050a05;
   overflow: hidden;
   z-index: 30;
 }
@@ -791,12 +881,12 @@ canvas {
   position: relative;
   z-index: 2;
   width: 420px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #d9e4f2;
-  border-radius: 22px;
+  background: rgba(0, 10, 0, 0.92);
+  border: 1px solid #00ff41;
+  border-radius: 8px;
   padding: 28px;
   text-align: center;
-  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.12);
+  box-shadow: 0 0 40px rgba(0, 255, 65, 0.2), inset 0 0 30px rgba(0, 255, 65, 0.04);
 }
 
 .moneyBg {
@@ -808,9 +898,9 @@ canvas {
 
 .moneySign {
   position: absolute;
-  color: rgba(60, 125, 255, 0.12);
+  color: rgba(0, 255, 65, 0.1);
   font-weight: 900;
-  font-family: Arial, sans-serif;
+  font-family: 'Courier New', Courier, monospace;
   animation: floatMoney linear infinite;
   user-select: none;
 }
@@ -838,19 +928,21 @@ canvas {
   top: 50%;
   transform: translate(-50%, -50%);
   width: 340px;
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid #d9e4f2;
-  border-radius: 22px;
+  background: rgba(0, 10, 0, 0.96);
+  border: 1px solid #00ff41;
+  border-radius: 8px;
   padding: 22px;
   z-index: 60;
-  box-shadow: 0 16px 36px rgba(59, 92, 141, 0.14);
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
   text-align: center;
 }
 
 .authPanel h2 {
   margin: 0 0 10px;
   font-size: 24px;
-  color: #24364d;
+  color: #00ff41;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .authButtons {
@@ -867,7 +959,7 @@ canvas {
 #authStatus {
   margin-top: 12px;
   font-size: 13px;
-  color: #556980;
+  color: #4dbb6a;
   min-height: 18px;
 }
 
@@ -877,10 +969,10 @@ canvas {
   bottom: 18px;
   z-index: 50;
   width: 240px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #d8e4f1;
-  border-radius: 18px;
-  box-shadow: 0 14px 30px rgba(59, 92, 141, 0.14);
+  background: rgba(0, 10, 0, 0.94);
+  border: 1px solid #00cc33;
+  border-radius: 8px;
+  box-shadow: 0 0 16px rgba(0, 255, 65, 0.15);
   padding: 10px 10px 10px;
   backdrop-filter: blur(8px);
   transition: opacity 0.18s ease, transform 0.18s ease;
@@ -907,10 +999,10 @@ canvas {
   right: -2px;
   width: 22px;
   height: 22px;
-  border: 1px solid #d7e3ef;
-  border-radius: 999px;
-  background: #f7fbff;
-  color: #607289;
+  border: 1px solid #00cc33;
+  border-radius: 4px;
+  background: rgba(0, 20, 0, 0.9);
+  color: #00ff41;
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
@@ -921,13 +1013,13 @@ canvas {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #6a7d94;
+  color: #2d9e52;
 }
 
 .musicSongName {
   font-size: 13px;
   font-weight: 800;
-  color: #24364d;
+  color: #00ff41;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -944,10 +1036,10 @@ canvas {
 .musicControlBtn {
   width: 38px;
   height: 38px;
-  border: 1px solid #d7e3ef;
+  border: 1px solid #00cc33;
   border-radius: 50%;
-  background: #f7fbff;
-  color: #2a4261;
+  background: rgba(0, 20, 0, 0.8);
+  color: #00ff41;
   font-size: 18px;
   font-weight: 900;
   cursor: pointer;
@@ -956,16 +1048,17 @@ canvas {
 
 .musicControlBtn:hover {
   transform: translateY(-1px);
-  background: #eef5fd;
+  background: rgba(0, 255, 65, 0.15);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
 }
 
 .musicControlBtn.primary {
   width: 46px;
   height: 46px;
-  background: linear-gradient(180deg, #4db2ff, #1e7ff0);
-  color: #ffffff;
-  border-color: #1e7ff0;
-  box-shadow: 0 10px 22px rgba(30, 127, 240, 0.22);
+  background: rgba(0, 255, 65, 0.18);
+  color: #00ff41;
+  border-color: #00ff41;
+  box-shadow: 0 0 16px rgba(0, 255, 65, 0.3);
 }
 
 .musicVolumeRow {
@@ -978,7 +1071,7 @@ canvas {
 .musicVolumeLabel {
   font-size: 12px;
   font-weight: 800;
-  color: #607289;
+  color: #2d9e52;
 }
 
 .musicVolumeRow input[type="range"] {
@@ -1989,13 +2082,13 @@ canvas {
 
 /* === Missing current UI states === */
 .secondaryButton {
-  background: #eef3ff;
-  color: #3459ff;
-  border: 1px solid #cfdbff;
+  background: rgba(0, 100, 30, 0.1);
+  color: #4dbb6a;
+  border: 1px solid #1a5c2a;
 }
 
 .secondaryButton:hover {
-  filter: brightness(0.98);
+  background: rgba(0, 150, 50, 0.18);
 }
 
 .cancelQueueBtn {
@@ -2016,3 +2109,147 @@ canvas {
   transform: none;
   filter: none;
 }
+
+/* ── MATRIX SCANLINE OVERLAY ─────────────────────────────────── */
+.menu::after,
+.landingScreen::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+}
+
+/* ── MATRIX SCROLLBAR ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 10, 0, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: #00cc33;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff41;
+}
+
+/* ── RANGE INPUT (volume slider) ─────────────────────────────── */
+input[type="range"] {
+  accent-color: #00ff41;
+}
+
+/* ── BJSIDELABEL / BJBALANCEVALUE matrix recolor ─────────────── */
+.bjSideLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: #2d9e52;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.bjBalanceValue {
+  margin-top: 8px;
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 900;
+  color: #00ff41;
+  text-shadow: 0 0 10px rgba(0,255,65,0.4);
+}
+
+.bjStatus {
+  text-align: center;
+  font-size: 14px;
+  color: #2d9e52;
+  min-height: 20px;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+/* ── BJ SIDE CARD dark recolor ────────────────────────────────── */
+.bjSideCard {
+  background: rgba(0, 10, 0, 0.9);
+  border: 1px solid #1a5c2a;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.08);
+  padding: 16px;
+}
+
+/* ── BJ AMOUNT BUTTONS ────────────────────────────────────────── */
+.bjAmountBtn {
+  padding: 11px 4px;
+  border-radius: 6px;
+  background: rgba(0, 20, 0, 0.8);
+  color: #00ff41;
+  border: 1px solid #1a5c2a;
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 900;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.bjAmountBtn:hover:not(:disabled) {
+  border-color: #00ff41;
+  box-shadow: 0 0 8px rgba(0,255,65,0.25);
+}
+
+.bjAmountBtn.active {
+  background: rgba(0, 255, 65, 0.18);
+  color: #00ff41;
+  border-color: #00ff41;
+  box-shadow: 0 0 12px rgba(0, 255, 65, 0.35);
+}
+
+/* ── BJ DEAL BUTTON ───────────────────────────────────────────── */
+.bjDealBtn {
+  width: 100%;
+  padding: 18px 16px;
+  border-radius: 8px;
+  background: rgba(0, 255, 65, 0.14);
+  color: #00ff41;
+  border: 1px solid #00ff41;
+  box-shadow: 0 0 18px rgba(0, 255, 65, 0.22);
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: 0.18s ease;
+}
+
+.bjDealBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 28px rgba(0, 255, 65, 0.38);
+  background: rgba(0, 255, 65, 0.22);
+}
+
+/* ── BLACKJACK MODAL HEADER ───────────────────────────────────── */
+.blackjackModalTitle {
+  font-size: 30px;
+  font-weight: 900;
+  color: #00ff41;
+  text-shadow: 0 0 12px rgba(0,255,65,0.4);
+}
+
+.blackjackModalSub {
+  margin-top: 4px;
+  color: #2d9e52;
+  font-size: 14px;
+}
+
+/* ── ROULETTE BALANCE ─────────────────────────────────────────── */
+.rouletteBalanceValue {
+  color: #00ff41;
+  font-weight: 900;
+}
+
